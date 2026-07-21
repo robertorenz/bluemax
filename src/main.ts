@@ -5,6 +5,7 @@ const $ = (id: string) => document.getElementById(id)!;
 const hud: Hud = {
   score: $('score'),
   lives: $('lives'),
+  bombs: $('bombs'),
   fuelbar: $('fuelbar'),
   altbar: $('altbar'),
   altval: $('altval'),

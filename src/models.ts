@@ -161,14 +161,36 @@ export interface RiverParams {
   amp: number;
   waveLen: number;
   phase: number;
+  amp2: number;
+  waveLen2: number;
+  phase2: number;
+  sideIn: -1 | 1;  // side the far end swings off to
+  sideOut: -1 | 1; // side the near end swings off to
 }
 
-export const RIVER_LEN = 480;
+export const RIVER_LEN = 2000;
 export const RIVER_WIDTH = 14;
+const EDGE_PUSH = 340;  // how far off-corridor the ends swing
+const EDGE_RAMP = 280;  // over how many units the swing happens
 
-/** X offset of the river centerline at a z-position relative to the river's center. */
-export function riverXAt(params: RiverParams, relZ: number): number {
-  return params.amp * Math.sin((relZ * Math.PI * 2) / params.waveLen + params.phase);
+const smooth01 = (t: number): number => {
+  t = Math.min(1, Math.max(0, t));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * X offset of the river centerline at a z relative to the river's center.
+ * Two superimposed sine wanders make it drift off the play corridor and
+ * return; both ends push far off to one side so the river enters and exits
+ * the world laterally instead of stopping dead.
+ */
+export function riverXAt(p: RiverParams, relZ: number): number {
+  const wander =
+    p.amp * Math.sin((relZ * Math.PI * 2) / p.waveLen + p.phase) +
+    p.amp2 * Math.sin((relZ * Math.PI * 2) / p.waveLen2 + p.phase2);
+  const tIn = smooth01((-relZ - (RIVER_LEN / 2 - EDGE_RAMP)) / EDGE_RAMP);
+  const tOut = smooth01((relZ - (RIVER_LEN / 2 - EDGE_RAMP)) / EDGE_RAMP);
+  return wander + p.sideIn * EDGE_PUSH * tIn + p.sideOut * EDGE_PUSH * tOut;
 }
 
 /** Meandering river strip, built as one vertex-strip mesh. */
@@ -176,11 +198,11 @@ export function makeRiver(params: RiverParams): THREE.Group {
   const g = new THREE.Group();
   const positions: number[] = [];
   const normals: number[] = [];
-  const step = 20;
+  const step = 24;
   // Ends taper to a point so the river doesn't cut off in a blunt square.
   const halfW = (z: number) =>
     (RIVER_WIDTH / 2) *
-    Math.max(0.05, Math.min((z + RIVER_LEN / 2) / 70, (RIVER_LEN / 2 - z) / 70, 1));
+    Math.max(0.05, Math.min((z + RIVER_LEN / 2) / 90, (RIVER_LEN / 2 - z) / 90, 1));
   for (let z = -RIVER_LEN / 2; z < RIVER_LEN / 2; z += step) {
     const c0 = riverXAt(params, z);
     const c1 = riverXAt(params, z + step);

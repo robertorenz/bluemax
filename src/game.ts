@@ -12,6 +12,7 @@ import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
 const PLAYER_Z = -20;     // plane sits ahead of the camera line so bomb falls stay in view
 const MAX_ALT = 38;
+const MAX_BOMBS = 30;
 const MIN_SAFE_ALT = 0.6; // below this off-runway = crash
 const LATERAL_RANGE = 26;
 const GRAVITY = 25;
@@ -45,6 +46,16 @@ interface GroundObj {
   dead?: boolean;
   nextSmokeAt?: number;
 }
+
+/** Solid extents for plane-vs-structure crashes: square half-width and height. */
+const STRUCT_HIT: Partial<Record<GroundKind, { r: number; h: number }>> = {
+  building: { r: 5.5, h: 9 },
+  factory:  { r: 8.5, h: 7.5 },
+  aagun:    { r: 2.8, h: 3.4 },
+  tank:     { r: 2.8, h: 3 },
+  depot:    { r: 5, h: 3.6 },
+  ship:     { r: 4, h: 4 },
+};
 
 const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: number }> = {
   building: { hp: 2, score: 50, radius: 16 },
@@ -87,6 +98,7 @@ interface Flash {
 export interface Hud {
   score: HTMLElement;
   lives: HTMLElement;
+  bombs: HTMLElement;
   fuelbar: HTMLElement;
   altbar: HTMLElement;
   altval: HTMLElement;
@@ -122,6 +134,7 @@ export class Game {
 
   private alt = 15;
   private fuel = 100;
+  private bombsLeft = MAX_BOMBS;
   private lives = 3;
   private score = 0;
   private now = 0;
@@ -254,6 +267,7 @@ export class Game {
 
     this.alt = 15;
     this.fuel = 100;
+    this.bombsLeft = MAX_BOMBS;
     this.lives = 3;
     this.score = 0;
     this.invulnUntil = 0;
@@ -371,6 +385,9 @@ export class Game {
     this.player.rotation.z = THREE.MathUtils.lerp(this.player.rotation.z, bank, 0.12);
     this.player.rotation.x = THREE.MathUtils.lerp(this.player.rotation.x, pitch, 0.12);
 
+    // Flying into a structure is an immediate crash.
+    this.checkStructureCollision();
+
     // Ground contact: touching down on a runway starts the landing rollout;
     // anywhere else it's a crash.
     if (this.alt <= MIN_SAFE_ALT) {
@@ -397,8 +414,9 @@ export class Game {
         );
       }
     }
-    if (this.keys.has('b') && this.now > this.nextBombAt && this.alt > 3) {
+    if (this.keys.has('b') && this.now > this.nextBombAt && this.alt > 3 && this.bombsLeft >= 1) {
       this.nextBombAt = this.now + 750;
+      this.bombsLeft -= 1;
       this.audio.bombWhistle(Math.sqrt((2 * Math.max(1, p.y)) / GRAVITY));
       const bomb = makeBomb();
       bomb.position.set(p.x, p.y - 0.8, p.z);
@@ -414,6 +432,7 @@ export class Game {
   private updateFuel(dt: number): void {
     if (this.mode === 'landing') {
       this.fuel = Math.min(100, this.fuel + 45 * dt);
+      this.bombsLeft = Math.min(MAX_BOMBS, this.bombsLeft + 12 * dt); // ground crew rearming
       return;
     }
     if (this.mode === 'flying') this.hud.refuel.classList.add('hidden');
@@ -424,6 +443,31 @@ export class Game {
       this.alt -= 6 * dt; // engine out, forced descent — a runway can still save you
       if (this.alt <= 0.3 && !this.runwayUnder()) {
         this.gameOver('OUT OF FUEL');
+      }
+    }
+  }
+
+  /** Crash when the plane occupies the same space as a solid structure. */
+  private checkStructureCollision(): void {
+    const p = this.player.position;
+    for (const o of this.groundObjs) {
+      const pos = o.group.position;
+      const dx = Math.abs(pos.x - p.x);
+      const dz = Math.abs(pos.z - p.z);
+      let hit = false;
+      if (o.kind === 'bridge' && !o.dead) {
+        // The deck is solid, but a daring pilot can fly under it.
+        hit = dz < 3.5 && dx < 15.5 && this.alt > 2.6 && this.alt < 5.4;
+      } else {
+        const dims = STRUCT_HIT[o.kind];
+        if (!dims) continue;
+        const h = o.dead ? 2.2 : dims.h; // wreckage is low enough to skim over
+        hit = dz < dims.r && dx < dims.r && this.alt < h;
+      }
+      if (hit) {
+        this.playerHit(true); // crash explosion + lost life
+        this.alt = 14;
+        return;
       }
     }
   }
@@ -473,8 +517,8 @@ export class Game {
     }
     if (this.now > this.nextRiverAt) {
       this.nextRiverAt = this.spawnRiver()
-        ? this.now + 26000 + Math.random() * 14000
-        : this.now + 5000;
+        ? this.now + 36000 + Math.random() * 14000
+        : this.now + 6000;
     }
   }
 
@@ -540,27 +584,46 @@ export class Game {
     return true;
   }
 
-  /** True when placing here would collide with a runway or river lane (or vice versa). */
+  /** True when placing here would collide with a runway or a river's course. */
   private blocksRunwayLane(kind: GroundKind, x: number): boolean {
-    const isLane = (k: GroundKind) => k === 'runway' || k === 'river';
-    return this.groundObjs.some((o) => {
-      if (!isLane(kind) && !isLane(o.kind)) return false;
-      // Rivers are long and meander, so they claim a wider corridor for longer.
-      const margin = kind === 'river' || o.kind === 'river' ? 34 : 18;
-      const zWindow = o.kind === 'river' ? -240 : -380;
-      return o.group.position.z < zWindow && Math.abs(o.group.position.x - x) < margin;
-    });
+    for (const o of this.groundObjs) {
+      if (o.kind === 'river' && o.river) {
+        // Everything scrolls at the same speed, so a newly spawned object stays
+        // aligned with the river section sharing its spawn z forever — check
+        // the course at exactly that section (plus the object's z extent).
+        const rel = -500 - o.group.position.z;
+        const halfSpan = kind === 'runway' ? 45 : 20;
+        for (let dz = -halfSpan; dz <= halfSpan; dz += 15) {
+          const r = rel + dz;
+          if (Math.abs(r) > RIVER_LEN / 2) continue;
+          if (Math.abs(o.group.position.x + riverXAt(o.river, r) - x) < 24) return true;
+        }
+      } else if ((kind === 'runway' || o.kind === 'runway') && o.kind !== 'river') {
+        if (o.group.position.z < -380 && Math.abs(o.group.position.x - x) < 18) return true;
+      }
+    }
+    return false;
   }
 
-  /** Meandering river with bridges across it and barges steaming along it. */
+  /** Long meandering river with bridges where it crosses the corridor, and barges. */
   private spawnRiver(): boolean {
-    const baseX = (Math.random() - 0.5) * 50;
-    if (this.blocksRunwayLane('river', baseX)) return false;
+    // Never two rivers side by side at the spawn horizon.
+    if (this.groundObjs.some(
+      (o) => o.kind === 'river' && o.group.position.z - RIVER_LEN / 2 < -480,
+    )) {
+      return false;
+    }
     const params: RiverParams = {
-      amp: 6 + Math.random() * 8,
-      waveLen: 170 + Math.random() * 130,
+      amp: 60 + Math.random() * 70,
+      waveLen: 500 + Math.random() * 400,
       phase: Math.random() * Math.PI * 2,
+      amp2: 10 + Math.random() * 14,
+      waveLen2: 120 + Math.random() * 100,
+      phase2: Math.random() * Math.PI * 2,
+      sideIn: Math.random() < 0.5 ? -1 : 1,
+      sideOut: Math.random() < 0.5 ? -1 : 1,
     };
+    const baseX = (Math.random() - 0.5) * 30;
     const group = makeRiver(params);
     const centerZ = -500 - RIVER_LEN / 2;
     group.position.set(baseX, 0, centerZ);
@@ -568,18 +631,24 @@ export class Game {
     const river: GroundObj = { group, kind: 'river', hp: 99, fireAt: Infinity, river: params };
     this.groundObjs.push(river);
 
-    const bridgeCount = 1 + (Math.random() < 0.45 ? 1 : 0);
-    for (let i = 0; i < bridgeCount; i++) {
-      const rz = -160 + i * 160 + Math.random() * 80;
+    // Bridges only where the river actually crosses the play corridor.
+    const bridgeSpots: number[] = [];
+    for (let tries = 0; tries < 40 && bridgeSpots.length < 3; tries++) {
+      const rz = (Math.random() - 0.5) * (RIVER_LEN - 400);
+      if (Math.abs(baseX + riverXAt(params, rz)) > 36) continue;
+      if (bridgeSpots.some((s) => Math.abs(s - rz) < 240)) continue;
+      bridgeSpots.push(rz);
+    }
+    for (const rz of bridgeSpots) {
       const bridge = makeBridge();
       bridge.position.set(baseX + riverXAt(params, rz), 0, centerZ + rz);
       this.scene.add(bridge);
       this.groundObjs.push({ group: bridge, kind: 'bridge', hp: GROUND_STATS.bridge.hp, fireAt: Infinity });
     }
 
-    const shipCount = 1 + (Math.random() < 0.5 ? 1 : 0);
+    const shipCount = 2 + (Math.random() < 0.4 ? 1 : 0);
     for (let i = 0; i < shipCount; i++) {
-      const rz = (Math.random() - 0.5) * 360;
+      const rz = (Math.random() - 0.5) * (RIVER_LEN - 300);
       const ship = makeShip();
       ship.position.set(baseX + riverXAt(params, rz), 0, centerZ + rz);
       this.scene.add(ship);
@@ -651,13 +720,16 @@ export class Game {
         o.group.rotation.y = o.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
       }
 
-      // Barges follow their river's meander, reversing near its ends.
+      // Barges follow their river's course, turning back near its ends.
       if (o.kind === 'ship' && o.host?.river && o.vz && !o.damaged) {
         pos.z += o.vz * dt;
         const rel = pos.z - o.host.group.position.z;
-        if (Math.abs(rel) > RIVER_LEN / 2 - 30) o.vz = -o.vz;
+        if (Math.abs(rel) > RIVER_LEN / 2 - 130) o.vz = -o.vz;
         pos.x = o.host.group.position.x + riverXAt(o.host.river, rel);
-        o.group.rotation.y = o.vz > 0 ? Math.PI : 0;
+        // Point the bow along the local course direction.
+        const dzs = o.vz > 0 ? 6 : -6;
+        const dx = o.host.group.position.x + riverXAt(o.host.river, rel + dzs) - pos.x;
+        o.group.rotation.y = Math.atan2(-dx, -dzs);
       }
 
       // Damaged or destroyed objects trail smoke instead of fighting back.
@@ -691,7 +763,7 @@ export class Game {
         }
       }
 
-      if (pos.z > (o.kind === 'river' ? 400 : 140)) {
+      if (pos.z > (o.kind === 'river' ? RIVER_LEN / 2 + 200 : 140)) {
         this.scene.remove(o.group);
         this.groundObjs.splice(i, 1);
       }
@@ -956,6 +1028,9 @@ export class Game {
   private updateHud(): void {
     this.hud.score.textContent = `SCORE ${this.score}`;
     this.hud.lives.textContent = '✈ '.repeat(Math.max(0, this.lives)).trim();
+    const bombCount = Math.floor(this.bombsLeft);
+    this.hud.bombs.textContent = `💣 ${bombCount}`;
+    this.hud.bombs.style.color = bombCount <= 5 ? 'var(--danger)' : 'var(--text)';
     (this.hud.fuelbar as HTMLElement).style.width = `${Math.max(0, this.fuel)}%`;
     (this.hud.fuelbar as HTMLElement).style.background =
       this.fuel < 25 ? 'var(--danger)' : 'var(--good)';

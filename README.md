@@ -33,8 +33,13 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
   while you're on the ground and the camera banks with your turns in flight.
 - **Damage states** — a direct bomb hit flattens a target; a near miss leaves it
   charred, smoking, and out of action. Wreckage stays on the map instead of vanishing.
-- **Rivers** — meandering rivers appear from time to time, crossed by bombable
-  bridges and patrolled by barges that steam along the bends.
+- **Rivers** — long meandering rivers arrive from the distance, wander across the
+  corridor and off to the sides (and back), crossed by bombable bridges and
+  patrolled by barges that steam along the bends.
+- **Limited ordnance** — you carry 30 bombs; the ground crew rearms you during a
+  landing rollout alongside refueling.
+- **Solid structures** — flying into a building, factory, tank, depot, or ship is
+  an instant crash. Bridge decks are solid too, but you can fly *under* them.
 - **Overtakers** — a minute into the sortie, some enemy planes come from *behind*,
   blow past you, then swing around and attack head-on.
 - **Ground contact** — touching the ground away from a runway is a crash.
