@@ -8,6 +8,7 @@ import {
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
+const PLAYER_Z = -20;     // plane sits ahead of the camera line so bomb falls stay in view
 const MAX_ALT = 38;
 const MIN_SAFE_ALT = 0.6; // below this off-runway = crash
 const LATERAL_RANGE = 26;
@@ -105,7 +106,8 @@ export class Game {
   private nextRunwayAt = 0;
 
   constructor(container: HTMLElement, private hud: Hud) {
-    const W = 960, H = 640;
+    const W = container.clientWidth || window.innerWidth;
+    const H = container.clientHeight || window.innerHeight;
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(W, H);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -114,6 +116,14 @@ export class Game {
     container.prepend(this.renderer.domElement);
 
     this.camera = new THREE.PerspectiveCamera(55, W / H, 1, 900);
+
+    window.addEventListener('resize', () => {
+      const w = container.clientWidth || window.innerWidth;
+      const h = container.clientHeight || window.innerHeight;
+      this.renderer.setSize(w, h);
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+    });
 
     this.buildSky();
     this.buildLights();
@@ -177,7 +187,7 @@ export class Game {
 
   private buildPlayer(): void {
     const { group, prop } = makeBiplane(P.playerBody, P.playerWing, P.playerDetail);
-    group.position.set(0, this.alt, 0);
+    group.position.set(0, this.alt, PLAYER_Z);
     this.player = group;
     this.playerProp = prop;
     this.scene.add(group);
@@ -221,7 +231,7 @@ export class Game {
     this.nextEnemyAt = this.now + 2500;
     this.nextGroundAt = this.now + 800;
     this.nextRunwayAt = this.now + 13000;
-    this.player.position.set(0, this.alt, 0);
+    this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
     this.mode = 'flying';
     this.speedFactor = 1;
@@ -287,7 +297,8 @@ export class Game {
       p.y = this.alt;
       this.player.rotation.z = THREE.MathUtils.lerp(this.player.rotation.z, 0, 0.15);
       this.player.rotation.x = THREE.MathUtils.lerp(this.player.rotation.x, 0, 0.15);
-      const runwayEnding = !this.activeRunway || this.activeRunway.group.position.z > 18;
+      const runwayEnding =
+        !this.activeRunway || this.activeRunway.group.position.z > this.player.position.z + 18;
       if (this.fuel >= 100 || runwayEnding) {
         this.mode = 'takeoff';
         this.hud.refuel.textContent = 'TAKING OFF';
@@ -685,12 +696,12 @@ export class Game {
     const p = this.player.position;
     const targetX = p.x * 0.45;
     this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, targetX, 4, dt);
-    this.camera.position.y = 40 + p.y * 0.22;
-    this.camera.position.z = 50;
+    this.camera.position.y = 38 + p.y * 0.22;
+    this.camera.position.z = 44;
     // Roll the horizon gently with the player's bank.
     this.cameraRoll = THREE.MathUtils.damp(this.cameraRoll, this.player.rotation.z * 0.35, 4, dt);
     this.camera.up.set(Math.sin(this.cameraRoll), Math.cos(this.cameraRoll), 0);
-    this.camera.lookAt(p.x * 0.7, 2 + p.y * 0.35, -75);
+    this.camera.lookAt(p.x * 0.7, 2 + p.y * 0.35, -90);
   }
 
   // ------------------------------------------------------------- damage

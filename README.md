@@ -21,6 +21,7 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
 | SPACE | Machine guns |
 | B | Drop bomb |
 | M | Mute sound |
+| F | Fullscreen |
 
 **Mechanics carried over from the original:**
 
@@ -61,4 +62,5 @@ Pushes to `master` auto-deploy to GitHub Pages via the workflow in
   no audio files
 - [TypeScript](https://www.typescriptlang.org/) — strict mode
 - [Vite](https://vitejs.dev/) — dev server + bundler
-- DOM/CSS HUD and modal overlays (no in-canvas UI)
+- DOM/CSS HUD and modal overlays (no in-canvas UI); fills the browser window and
+  supports fullscreen (F key or the ⛶ button)

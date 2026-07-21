@@ -19,18 +19,12 @@
     html, body {
       height: 100%;
       background: #131c26;
-      display: flex;
-      align-items: center;
-      justify-content: center;
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       overflow: hidden;
     }
     #app {
-      position: relative;
-      width: 960px;
-      height: 640px;
-      box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
-      border-radius: 6px;
+      position: fixed;
+      inset: 0;
       overflow: hidden;
     }
     #app canvas { display: block; }
@@ -51,6 +45,7 @@
       user-select: none;
     }
     #hud .left { display: flex; align-items: center; gap: 18px; }
+    #hud .right { display: flex; align-items: center; }
     #score { font-size: 19px; font-weight: 700; letter-spacing: 1px; }
     #lives { color: var(--steel); font-size: 18px; letter-spacing: 4px; }
     #hud .gauges { display: flex; flex-direction: column; gap: 6px; width: 250px; }
@@ -139,6 +134,16 @@
       transition: filter 0.15s;
     }
     button:hover { filter: brightness(1.12); }
+    #fsBtn {
+      background: transparent;
+      border: 1px solid var(--panel-border);
+      color: var(--text-dim);
+      border-radius: 4px;
+      padding: 3px 10px;
+      font-size: 16px;
+      margin-left: 16px;
+    }
+    #fsBtn:hover { color: var(--text); border-color: var(--steel); filter: none; }
   </style>
 </head>
 <body>
@@ -148,16 +153,19 @@
         <span id="score">SCORE 0</span>
         <span id="lives">✈ ✈ ✈</span>
       </div>
-      <div class="gauges">
-        <div class="gauge">
-          <label>FUEL</label>
-          <div class="bar"><div id="fuelbar"></div></div>
+      <div class="right">
+        <div class="gauges">
+          <div class="gauge">
+            <label>FUEL</label>
+            <div class="bar"><div id="fuelbar"></div></div>
+          </div>
+          <div class="gauge">
+            <label>ALT</label>
+            <div class="bar"><div id="altbar"></div></div>
+            <span class="val" id="altval">15</span>
+          </div>
         </div>
-        <div class="gauge">
-          <label>ALT</label>
-          <div class="bar"><div id="altbar"></div></div>
-          <span class="val" id="altval">15</span>
-        </div>
+        <button id="fsBtn" title="Fullscreen (F)">⛶</button>
       </div>
     </div>
     <div id="refuel" class="hidden">REFUELING</div>
@@ -172,6 +180,7 @@
           <span class="k">SPACE</span><span class="d">Machine guns</span>
           <span class="k">B</span><span class="d">Drop bomb</span>
           <span class="k">M</span><span class="d">Mute sound</span>
+          <span class="k">F</span><span class="d">Fullscreen</span>
         </div>
         <div class="hint">
           Bomb targets, dogfight at matching altitude, and watch your fuel —<br />

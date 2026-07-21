@@ -4,8 +4,9 @@ import { makeTree } from './models';
 
 export const CHUNK_D = 240; // depth (z) of one terrain chunk
 export const CHUNK_COUNT = 4;
-const CHUNK_W = 460;
-const COLS = 12;
+// Wide enough that ultrawide/fullscreen windows never see the world's edge.
+const CHUNK_W = 720;
+const COLS = 18;
 const ROWS = 8;
 
 /** One farmland chunk: a single vertex-colored mesh of field quads, plus trees. */
@@ -54,7 +55,7 @@ export function makeChunk(): THREE.Group {
     const tree = makeTree();
     const side = Math.random() < 0.5 ? -1 : 1;
     tree.position.set(
-      side * (48 + Math.random() * 160),
+      side * (48 + Math.random() * 290),
       0,
       -CHUNK_D / 2 + Math.random() * CHUNK_D,
     );

@@ -34,8 +34,16 @@ game.onGameOver = (reason, score) => {
 
 $('startBtn').addEventListener('click', startGame);
 $('againBtn').addEventListener('click', startGame);
+
+function toggleFullscreen(): void {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  else void document.documentElement.requestFullscreen();
+}
+$('fsBtn').addEventListener('click', toggleFullscreen);
+
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && game.state !== 'playing') startGame();
+  if (e.key.toLowerCase() === 'f' && !e.repeat) toggleFullscreen();
 });
 
 // Fixed-ish timestep loop with a delta clamp so tab-switches don't teleport things.
