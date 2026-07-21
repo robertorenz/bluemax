@@ -31,6 +31,8 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
   (a runway underneath can still save you).
 - **Landing** — a real touchdown-rollout-takeoff sequence on runways; the world slows
   while you're on the ground and the camera banks with your turns in flight.
+- **Damage states** — a direct bomb hit flattens a target; a near miss leaves it
+  charred, smoking, and out of action. Wreckage stays on the map instead of vanishing.
 - **Ground contact** — touching the ground away from a runway is a crash.
 
 ## Scoring

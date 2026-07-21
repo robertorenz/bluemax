@@ -3,7 +3,7 @@ import { AudioFx } from './audio';
 import { P } from './palette';
 import {
   makeBiplane, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
-  makeCloud, type AAGunModel,
+  makeCloud, makeRubble, type AAGunModel,
 } from './models';
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
@@ -30,6 +30,9 @@ interface GroundObj {
   barrel?: THREE.Group;
   hp: number;
   fireAt: number;
+  damaged?: boolean;
+  dead?: boolean;
+  nextSmokeAt?: number;
 }
 
 interface Bullet {
@@ -48,6 +51,7 @@ interface Bomb {
 interface Particle {
   mesh: THREE.Mesh;
   vel: THREE.Vector3;
+  grav: number;
   life: number;
   maxLife: number;
 }
@@ -512,7 +516,13 @@ export class Game {
       const pos = o.group.position;
       pos.z += this.scroll * dt;
 
-      if (o.kind === 'aagun' && o.barrel) {
+      // Damaged or destroyed objects trail smoke instead of fighting back.
+      if (o.damaged && this.now > (o.nextSmokeAt ?? 0) && pos.z > -420) {
+        o.nextSmokeAt = this.now + (o.dead ? 100 : 190);
+        this.spawnSmoke(pos, o.dead ? 1.3 : 0.8);
+      }
+
+      if (o.kind === 'aagun' && o.barrel && !o.damaged) {
         // Track the player with the barrel.
         const toPlayer = new THREE.Vector3().subVectors(p, pos);
         o.group.rotation.y = Math.atan2(-toPlayer.x, -toPlayer.z) + Math.PI;
@@ -600,19 +610,70 @@ export class Game {
 
   private detonate(at: THREE.Vector3): void {
     this.explode(at, 26);
-    for (let i = this.groundObjs.length - 1; i >= 0; i--) {
-      const o = this.groundObjs[i];
-      if (o.kind === 'runway') continue;
+    for (const o of this.groundObjs) {
+      if (o.kind === 'runway' || o.dead) continue;
       const pos = o.group.position;
-      if (Math.hypot(pos.x - at.x, pos.z - at.z) < 13) {
-        if (--o.hp <= 0) {
-          this.explode(pos.clone().setY(2), 22);
-          this.score += o.kind === 'aagun' ? 75 : 50;
-          this.scene.remove(o.group);
-          this.groundObjs.splice(i, 1);
-        }
-      }
+      const dist = Math.hypot(pos.x - at.x, pos.z - at.z);
+      if (dist >= 16) continue;
+      // Direct hits flatten the target; near misses leave it damaged and burning.
+      o.hp -= dist < 9 ? 2 : 1;
+      if (o.hp <= 0) this.destroyGroundObj(o);
+      else this.damageGroundObj(o);
     }
+  }
+
+  /** Char the meshes and tilt the roof — the "damaged and burning" state. */
+  private damageGroundObj(o: GroundObj): void {
+    if (o.damaged) return;
+    o.damaged = true;
+    o.fireAt = Infinity; // damaged AA guns stop firing
+    o.group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        (child.material as THREE.MeshLambertMaterial).color.multiplyScalar(0.5);
+      }
+    });
+    const roof = o.group.children[o.group.children.length - 1];
+    roof.rotation.z += 0.18;
+    roof.position.y -= 0.5;
+  }
+
+  /** Destroyed: score it, then leave burning wreckage on the map instead of vanishing. */
+  private destroyGroundObj(o: GroundObj): void {
+    const pos = o.group.position;
+    this.explode(pos.clone().setY(2), 22);
+    this.score += o.kind === 'aagun' ? 75 : 50;
+    o.dead = true;
+    o.damaged = true;
+    o.fireAt = Infinity;
+    if (o.kind === 'building') {
+      o.group.clear();
+      o.group.add(makeRubble());
+    } else {
+      o.group.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          (child.material as THREE.MeshLambertMaterial).color.multiplyScalar(0.3);
+        }
+      });
+      if (o.barrel) o.barrel.rotation.x = 1.5; // barrel slumps
+    }
+  }
+
+  private spawnSmoke(at: THREE.Vector3, scale: number): void {
+    const s = (0.7 + Math.random() * 0.7) * scale;
+    const shade = 0.18 + Math.random() * 0.25;
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(s, s, s),
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(shade, shade, shade) }),
+    );
+    mesh.position.set(
+      at.x + (Math.random() - 0.5) * 2,
+      at.y + 1 + Math.random() * 2,
+      at.z + (Math.random() - 0.5) * 2,
+    );
+    const vel = new THREE.Vector3((Math.random() - 0.5) * 1.5, 5 + Math.random() * 3, (Math.random() - 0.5) * 1.5);
+    const life = 1.1 + Math.random() * 0.6;
+    this.particles.push({ mesh, vel, grav: -1.5, life, maxLife: life });
+    this.scene.add(mesh);
   }
 
   // ------------------------------------------------------------- world & fx
@@ -650,7 +711,7 @@ export class Game {
         (Math.random() - 0.5) * 2,
       ).normalize().multiplyScalar(8 + Math.random() * 16);
       const life = 0.5 + Math.random() * 0.3;
-      this.particles.push({ mesh, vel, life, maxLife: life });
+      this.particles.push({ mesh, vel, grav: GRAVITY * 0.6, life, maxLife: life });
       this.scene.add(mesh);
     }
     const flash = new THREE.Mesh(
@@ -671,7 +732,7 @@ export class Game {
         this.particles.splice(i, 1);
         continue;
       }
-      p.vel.y -= GRAVITY * 0.6 * dt;
+      p.vel.y -= p.grav * dt;
       p.mesh.position.addScaledVector(p.vel, dt);
       p.mesh.rotation.x += dt * 6;
       p.mesh.rotation.y += dt * 5;

@@ -125,6 +125,26 @@ export function makeTree(): THREE.Group {
   return g;
 }
 
+/** Collapsed-building rubble left behind after a kill. */
+export function makeRubble(): THREE.Group {
+  const g = new THREE.Group();
+  const colors = [0x3a342c, 0x4a4238, 0x2e2a24];
+  for (let i = 0; i < 4; i++) {
+    const m = box(
+      3 + Math.random() * 3.5,
+      0.7 + Math.random() * 1.3,
+      3 + Math.random() * 3.5,
+      colors[i % 3],
+      (Math.random() - 0.5) * 4.5,
+      0.5,
+      (Math.random() - 0.5) * 4.5,
+    );
+    m.rotation.y = Math.random();
+    g.add(m);
+  }
+  return g;
+}
+
 export function makeBomb(): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.9, 3, 8), lambert(P.bomb));
   m.rotation.x = Math.PI / 2;
