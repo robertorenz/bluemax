@@ -4,6 +4,8 @@ A modernized homage to **Blue Max** (Synapse Software, 1983) — the classic iso
 WWI biplane shooter. Built with **Phaser 3 + TypeScript + Vite**, with all graphics
 generated procedurally at runtime (zero external assets).
 
+**▶ Play it now: [robertorenz.github.io/bluemax](https://robertorenz.github.io/bluemax/)**
+
 ## Gameplay
 
 Fly your biplane over diagonally scrolling farmland. Bomb buildings and AA guns,
@@ -39,6 +41,11 @@ npm install
 npm run dev      # dev server at http://localhost:5173
 npm run build    # type-check + production build to dist/
 ```
+
+## Deployment
+
+Pushes to `master` auto-deploy to GitHub Pages via the workflow in
+`.github/workflows/deploy.yml` (build → upload `dist/` → deploy).
 
 ## Stack
 
