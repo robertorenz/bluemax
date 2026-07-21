@@ -10,7 +10,7 @@ import {
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
-const PLAYER_Z = -20;     // plane sits ahead of the camera line so bomb falls stay in view
+const PLAYER_Z = -48;     // plane sits well ahead of the camera so bomb impacts land mid-screen
 const MAX_ALT = 38;
 const MAX_BOMBS = 30;
 const MIN_SAFE_ALT = 0.6; // below this off-runway = crash
@@ -230,6 +230,7 @@ export class Game {
   private buildPlayer(): void {
     const { group, prop } = makeBiplane(P.playerBody, P.playerWing, P.playerDetail);
     group.position.set(0, this.alt, PLAYER_Z);
+    group.scale.setScalar(1.25); // offset the extra camera distance
     this.player = group;
     this.playerProp = prop;
     this.scene.add(group);
@@ -406,9 +407,9 @@ export class Game {
     if (this.keys.has(' ') && this.now > this.nextGunAt) {
       this.nextGunAt = this.now + 150;
       this.audio.gun();
-      for (const gx of [-0.9, 0.9]) {
+      for (const gx of [-1.1, 1.1]) {
         this.spawnBullet(
-          new THREE.Vector3(p.x + gx, p.y + 0.9, p.z - 2.5),
+          new THREE.Vector3(p.x + gx, p.y + 1.1, p.z - 3.2),
           new THREE.Vector3(0, 0, -230),
           false,
         );
@@ -681,14 +682,14 @@ export class Game {
 
       // Pursue the player at range, but commit to the attack line on final
       // approach so head-on collisions stay dodgeable.
-      const pursuing = e.mode === 'attack' && pos.z < -110 ? 1 : 0;
+      const pursuing = e.mode === 'attack' && pos.z < PLAYER_Z - 70 ? 1 : 0;
       pos.x += (THREE.MathUtils.clamp(p.x - pos.x, -1, 1) * 9 * pursuing + Math.sin(e.wobble) * 3) * dt;
       e.alt += THREE.MathUtils.clamp(p.y - e.alt, -1, 1) * 2.4 * pursuing * dt;
       pos.y = e.alt;
       e.group.rotation.z = Math.sin(e.wobble) * 0.15;
 
       // Fire when in the approach window.
-      if (e.mode === 'attack' && this.now > e.fireAt && pos.z > -280 && pos.z < -30) {
+      if (e.mode === 'attack' && this.now > e.fireAt && pos.z > -300 && pos.z < PLAYER_Z - 10) {
         e.fireAt = this.now + 1500 + Math.random() * 1400;
         const dir = new THREE.Vector3().subVectors(p, pos).normalize().multiplyScalar(85);
         this.spawnBullet(pos.clone(), dir, true);
@@ -751,8 +752,8 @@ export class Game {
         }
 
         const tank = o.kind === 'tank';
-        const zMin = tank ? -260 : -320;
-        if (this.now > o.fireAt && pos.z > zMin && pos.z < -20) {
+        const zMin = tank ? -280 : -340;
+        if (this.now > o.fireAt && pos.z > zMin && pos.z < PLAYER_Z + 5) {
           o.fireAt = this.now + (tank ? 3400 + Math.random() * 1600 : 2000 + Math.random() * 1400);
           const muzzle = pos.clone().setY(2.5);
           const dir = new THREE.Vector3()
