@@ -12,6 +12,8 @@ const hud: Hud = {
 };
 
 const game = new Game($('app'), hud);
+// Dev console access for debugging/testing.
+(window as unknown as { game: Game }).game = game;
 
 const menuEl = $('menu');
 const overEl = $('gameover');

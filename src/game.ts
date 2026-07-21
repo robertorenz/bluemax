@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { AudioFx } from './audio';
 import { P } from './palette';
 import {
   makeBiplane, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
@@ -67,6 +68,12 @@ export interface Hud {
 export class Game {
   state: 'menu' | 'playing' | 'over' = 'menu';
   onGameOver: (reason: string, score: number) => void = () => {};
+
+  private audio = new AudioFx();
+  private mode: 'flying' | 'landing' | 'takeoff' = 'flying';
+  private speedFactor = 1;
+  private cameraRoll = 0;
+  private activeRunway: GroundObj | null = null;
 
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
@@ -184,6 +191,9 @@ export class Game {
     window.addEventListener('keyup', (e) => {
       this.keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key);
     });
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() === 'm' && !e.repeat) this.audio.toggleMute();
+    });
   }
 
   // ------------------------------------------------------------- lifecycle
@@ -213,12 +223,41 @@ export class Game {
     this.nextRunwayAt = this.now + 13000;
     this.player.position.set(0, this.alt, 0);
     this.player.visible = true;
+    this.mode = 'flying';
+    this.speedFactor = 1;
+    this.activeRunway = null;
+    this.audio.init();
     this.state = 'playing';
+  }
+
+  /** Current ground-scroll speed; the world slows while rolling down a runway. */
+  private get scroll(): number {
+    return WORLD_SPEED * this.speedFactor;
   }
 
   update(dt: number, now: number): void {
     this.now = now;
-    this.playerProp.rotation.z += 45 * dt;
+    this.playerProp.rotation.z += (30 + 20 * this.speedFactor) * dt;
+
+    this.speedFactor = THREE.MathUtils.damp(
+      this.speedFactor,
+      this.mode === 'landing' ? 0.35 : 1,
+      2.5,
+      dt,
+    );
+
+    if (this.state === 'playing') {
+      const throttle =
+        this.keys.has('ArrowUp') ? 0.25 : this.keys.has('ArrowDown') ? -0.1 : 0;
+      this.audio.setEngine(THREE.MathUtils.clamp(
+        0.4 * this.speedFactor + throttle + (this.alt / MAX_ALT) * 0.25 +
+          (this.mode === 'takeoff' ? 0.35 : 0),
+        0.12,
+        1,
+      ));
+    } else {
+      this.audio.setEngine(this.state === 'over' ? 0 : 0.1);
+    }
 
     if (this.state === 'playing') {
       this.updatePlayer(dt);
@@ -241,6 +280,32 @@ export class Game {
 
   private updatePlayer(dt: number): void {
     const p = this.player.position;
+
+    if (this.mode === 'landing') {
+      // Rolling down the runway: wheels on, level attitude, tanks filling.
+      this.alt = 0.45;
+      p.y = this.alt;
+      this.player.rotation.z = THREE.MathUtils.lerp(this.player.rotation.z, 0, 0.15);
+      this.player.rotation.x = THREE.MathUtils.lerp(this.player.rotation.x, 0, 0.15);
+      const runwayEnding = !this.activeRunway || this.activeRunway.group.position.z > 18;
+      if (this.fuel >= 100 || runwayEnding) {
+        this.mode = 'takeoff';
+        this.hud.refuel.textContent = 'TAKING OFF';
+      }
+      return;
+    }
+
+    if (this.mode === 'takeoff') {
+      this.alt += 10 * dt;
+      p.y = this.alt;
+      this.player.rotation.x = THREE.MathUtils.lerp(this.player.rotation.x, -0.24, 0.1);
+      if (this.alt >= 12) {
+        this.mode = 'flying';
+        this.activeRunway = null;
+      }
+      return;
+    }
+
     let bank = 0;
     let pitch = 0;
 
@@ -264,18 +329,24 @@ export class Game {
     this.player.rotation.z = THREE.MathUtils.lerp(this.player.rotation.z, bank, 0.12);
     this.player.rotation.x = THREE.MathUtils.lerp(this.player.rotation.x, pitch, 0.12);
 
-    // Ground contact: safe only over a runway.
-    if (this.alt <= MIN_SAFE_ALT && this.alt > 0) {
-      this.alt = Math.max(this.alt, 0.2);
-    }
-    if (this.alt <= 0.25 && !this.overRunway()) {
-      this.playerHit(true);
-      this.alt = 12;
+    // Ground contact: touching down on a runway starts the landing rollout;
+    // anywhere else it's a crash.
+    if (this.alt <= MIN_SAFE_ALT) {
+      const runway = this.runwayUnder();
+      if (runway) {
+        this.beginLanding(runway);
+        return;
+      }
+      if (this.alt <= 0.25) {
+        this.playerHit(true);
+        this.alt = 12;
+      }
     }
 
     // Weapons.
     if (this.keys.has(' ') && this.now > this.nextGunAt) {
       this.nextGunAt = this.now + 150;
+      this.audio.gun();
       for (const gx of [-0.9, 0.9]) {
         this.spawnBullet(
           new THREE.Vector3(p.x + gx, p.y + 0.9, p.z - 2.5),
@@ -286,6 +357,7 @@ export class Game {
     }
     if (this.keys.has('b') && this.now > this.nextBombAt && this.alt > 3) {
       this.nextBombAt = this.now + 750;
+      this.audio.bombWhistle(Math.sqrt((2 * Math.max(1, p.y)) / GRAVITY));
       const bomb = makeBomb();
       bomb.position.set(p.x, p.y - 0.8, p.z);
       this.bombs.push({ mesh: bomb, vy: 0, vz: 0 });
@@ -298,31 +370,40 @@ export class Game {
   }
 
   private updateFuel(dt: number): void {
-    const refueling = this.alt < 6 && this.overRunway();
-    if (refueling) {
-      this.fuel = Math.min(100, this.fuel + 22 * dt);
-    } else {
-      this.fuel -= 1.3 * dt;
+    if (this.mode === 'landing') {
+      this.fuel = Math.min(100, this.fuel + 45 * dt);
+      return;
     }
-    this.hud.refuel.classList.toggle('hidden', !refueling);
+    if (this.mode === 'flying') this.hud.refuel.classList.add('hidden');
+    this.fuel -= 1.3 * dt;
 
     if (this.fuel <= 0) {
       this.fuel = 0;
-      this.alt -= 6 * dt; // engine out, forced descent
-      if (this.alt <= 0.3 && !this.overRunway()) {
+      this.alt -= 6 * dt; // engine out, forced descent — a runway can still save you
+      if (this.alt <= 0.3 && !this.runwayUnder()) {
         this.gameOver('OUT OF FUEL');
       }
     }
   }
 
-  private overRunway(): boolean {
+  private runwayUnder(): GroundObj | null {
     const p = this.player.position;
-    return this.groundObjs.some(
-      (o) =>
-        o.kind === 'runway' &&
-        Math.abs(o.group.position.x - p.x) < 7.5 &&
-        Math.abs(o.group.position.z - p.z) < 36,
+    return (
+      this.groundObjs.find(
+        (o) =>
+          o.kind === 'runway' &&
+          Math.abs(o.group.position.x - p.x) < 6.5 &&
+          Math.abs(o.group.position.z - p.z) < 34,
+      ) ?? null
     );
+  }
+
+  private beginLanding(runway: GroundObj): void {
+    this.mode = 'landing';
+    this.activeRunway = runway;
+    this.alt = 0.45;
+    this.hud.refuel.textContent = 'REFUELING';
+    this.hud.refuel.classList.remove('hidden');
   }
 
   // ------------------------------------------------------------- spawning
@@ -385,7 +466,7 @@ export class Game {
       e.wobble += dt * 2.2;
       e.prop.rotation.z += 45 * dt;
 
-      pos.z += (WORLD_SPEED * 0.35 + e.speed) * dt;
+      pos.z += (this.scroll * 0.35 + e.speed) * dt;
       // Pursue the player at range, but commit to the attack line on final
       // approach so head-on collisions stay dodgeable.
       const pursuing = pos.z < -110 ? 1 : 0;
@@ -418,7 +499,7 @@ export class Game {
     for (let i = this.groundObjs.length - 1; i >= 0; i--) {
       const o = this.groundObjs[i];
       const pos = o.group.position;
-      pos.z += WORLD_SPEED * dt;
+      pos.z += this.scroll * dt;
 
       if (o.kind === 'aagun' && o.barrel) {
         // Track the player with the barrel.
@@ -492,7 +573,7 @@ export class Game {
     for (let i = this.bombs.length - 1; i >= 0; i--) {
       const b = this.bombs[i];
       b.vy -= GRAVITY * dt;
-      b.vz = Math.min(b.vz + 14 * dt, WORLD_SPEED * 0.55); // falls behind as drag bleeds airspeed
+      b.vz = Math.min(b.vz + 14 * dt, this.scroll * 0.55); // falls behind as drag bleeds airspeed
       const pos = b.mesh.position;
       pos.y += b.vy * dt;
       pos.z += b.vz * dt;
@@ -527,13 +608,13 @@ export class Game {
 
   private updateTerrain(dt: number): void {
     for (const chunk of this.chunks) {
-      chunk.position.z += WORLD_SPEED * dt;
+      chunk.position.z += this.scroll * dt;
       if (chunk.position.z > 120 + CHUNK_D / 2) {
         chunk.position.z -= CHUNK_D * CHUNK_COUNT;
       }
     }
     for (const cloud of this.clouds) {
-      cloud.position.z += WORLD_SPEED * 1.15 * dt;
+      cloud.position.z += this.scroll * 1.15 * dt;
       if (cloud.position.z > 100) {
         cloud.position.z = -620;
         cloud.position.x = (Math.random() - 0.5) * 300;
@@ -542,6 +623,7 @@ export class Game {
   }
 
   private explode(at: THREE.Vector3, count: number): void {
+    this.audio.explosion(count >= 20);
     for (let i = 0; i < count; i++) {
       const s = 0.3 + Math.random() * 0.5;
       const mesh = new THREE.Mesh(
@@ -605,6 +687,9 @@ export class Game {
     this.camera.position.x = THREE.MathUtils.damp(this.camera.position.x, targetX, 4, dt);
     this.camera.position.y = 40 + p.y * 0.22;
     this.camera.position.z = 50;
+    // Roll the horizon gently with the player's bank.
+    this.cameraRoll = THREE.MathUtils.damp(this.cameraRoll, this.player.rotation.z * 0.35, 4, dt);
+    this.camera.up.set(Math.sin(this.cameraRoll), Math.cos(this.cameraRoll), 0);
     this.camera.lookAt(p.x * 0.7, 2 + p.y * 0.35, -75);
   }
 
