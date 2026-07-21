@@ -19,19 +19,34 @@ export interface PlaneModel {
   prop: THREE.Mesh;
 }
 
+export type PlaneType = 'mono' | 'bi' | 'tri';
+
 /**
- * Low-poly biplane, nose pointing toward -z (the direction of flight).
+ * Low-poly WWI plane, nose pointing toward -z (the direction of flight).
  * Origin sits at the fuselage centerline so altitude == group.position.y.
  */
-export function makeBiplane(body: number, wing: number, detail: number): PlaneModel {
+export function makePlane(type: PlaneType, body: number, wing: number, detail: number): PlaneModel {
   const g = new THREE.Group();
 
   g.add(box(1.1, 1.0, 5.2, body, 0, 0.9, 0));           // fuselage
-  g.add(box(9, 0.22, 1.9, wing, 0, 1.95, -0.7));         // upper wing
-  g.add(box(8, 0.22, 1.7, wing, 0, 0.3, -0.6));          // lower wing
-  for (const sx of [-3.1, -1.2, 1.2, 3.1]) {             // struts
-    g.add(box(0.12, 1.6, 0.12, detail, sx, 1.1, -0.7));
+
+  if (type === 'mono') {
+    g.add(box(10.5, 0.24, 2.2, wing, 0, 0.95, -0.6));    // single shoulder wing
+  } else if (type === 'bi') {
+    g.add(box(9, 0.22, 1.9, wing, 0, 1.95, -0.7));       // upper wing
+    g.add(box(8, 0.22, 1.7, wing, 0, 0.3, -0.6));        // lower wing
+    for (const sx of [-3.1, -1.2, 1.2, 3.1]) {           // struts
+      g.add(box(0.12, 1.6, 0.12, detail, sx, 1.1, -0.7));
+    }
+  } else {
+    g.add(box(7, 0.22, 1.6, wing, 0, 0.25, -0.55));      // bottom wing
+    g.add(box(8.4, 0.22, 1.8, wing, 0, 1.4, -0.65));     // middle wing
+    g.add(box(7.4, 0.22, 1.6, wing, 0, 2.55, -0.7));     // top wing
+    for (const sx of [-2.6, -1.1, 1.1, 2.6]) {           // tall struts
+      g.add(box(0.12, 2.3, 0.12, detail, sx, 1.4, -0.62));
+    }
   }
+
   g.add(box(3.2, 0.15, 1.2, wing, 0, 1.0, 2.5));         // tailplane
   g.add(box(0.15, 1.15, 1.2, body, 0, 1.55, 2.6));       // fin
   g.add(box(0.7, 0.45, 0.9, detail, 0, 1.45, 0.35));     // cockpit rim
@@ -58,6 +73,10 @@ export function makeBiplane(body: number, wing: number, detail: number): PlaneMo
 
   return { group: g, prop };
 }
+
+/** Enemy planes are classic biplanes. */
+export const makeBiplane = (body: number, wing: number, detail: number): PlaneModel =>
+  makePlane('bi', body, wing, detail);
 
 export function makeBuilding(): THREE.Group {
   const g = new THREE.Group();

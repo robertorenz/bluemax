@@ -2,11 +2,20 @@ import * as THREE from 'three';
 import { AudioFx } from './audio';
 import { P } from './palette';
 import {
-  makeBiplane, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
+  makeBiplane, makePlane, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeBridge, makeBrokenBridge, makeShip, riverXAt, RIVER_LEN,
-  type AAGunModel, type RiverParams,
+  type AAGunModel, type RiverParams, type PlaneType,
 } from './models';
+
+export type { PlaneType };
+
+/** Handling differences between the airframes. */
+const PLANE_STATS: Record<PlaneType, { steer: number; climb: number; dive: number }> = {
+  mono: { steer: 58, climb: 11.5, dive: 20 },
+  bi:   { steer: 46, climb: 14,   dive: 17 },
+  tri:  { steer: 38, climb: 17.5, dive: 15 },
+};
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
@@ -110,6 +119,7 @@ export class Game {
   onGameOver: (reason: string, score: number) => void = () => {};
 
   private audio = new AudioFx();
+  private planeType: PlaneType = 'bi';
   private mode: 'flying' | 'landing' | 'takeoff' = 'flying';
   private speedFactor = 1;
   private cameraRoll = 0;
@@ -228,8 +238,16 @@ export class Game {
   }
 
   private buildPlayer(): void {
-    const { group, prop } = makeBiplane(P.playerBody, P.playerWing, P.playerDetail);
-    group.position.set(0, this.alt, PLAYER_Z);
+    this.choosePlane(this.planeType);
+  }
+
+  /** Swap the player's airframe; safe to call from the menu for a live preview. */
+  choosePlane(type: PlaneType): void {
+    this.planeType = type;
+    const pos = this.player?.position.clone();
+    if (this.player) this.scene.remove(this.player);
+    const { group, prop } = makePlane(type, P.playerBody, P.playerWing, P.playerDetail);
+    group.position.copy(pos ?? new THREE.Vector3(0, this.alt, PLAYER_Z));
     group.scale.setScalar(1.25); // offset the extra camera distance
     this.player = group;
     this.playerProp = prop;
@@ -251,7 +269,8 @@ export class Game {
 
   // ------------------------------------------------------------- lifecycle
 
-  start(): void {
+  start(plane?: PlaneType): void {
+    if (plane && plane !== this.planeType) this.choosePlane(plane);
     // Clear any leftover entities from the previous sortie.
     for (const e of this.enemies) this.scene.remove(e.group);
     for (const o of this.groundObjs) this.scene.remove(o.group);
@@ -363,21 +382,22 @@ export class Game {
       return;
     }
 
+    const stats = PLANE_STATS[this.planeType];
     let bank = 0;
     let pitch = 0;
 
     if (this.keys.has('ArrowLeft')) {
-      p.x -= 46 * dt;
+      p.x -= stats.steer * dt;
       bank = 0.42;
     } else if (this.keys.has('ArrowRight')) {
-      p.x += 46 * dt;
+      p.x += stats.steer * dt;
       bank = -0.42;
     }
     if (this.keys.has('ArrowUp')) {
-      this.alt = Math.min(MAX_ALT, this.alt + 14 * dt);
+      this.alt = Math.min(MAX_ALT, this.alt + stats.climb * dt);
       pitch = -0.28;
     } else if (this.keys.has('ArrowDown')) {
-      this.alt -= 17 * dt;
+      this.alt -= stats.dive * dt;
       pitch = 0.3;
     }
 

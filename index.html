@@ -145,6 +145,41 @@
       margin-left: 16px;
     }
     #fsBtn:hover { color: var(--text); border-color: var(--steel); filter: none; }
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--panel-border);
+      margin-left: 10px;
+    }
+    button.secondary:hover { border-color: var(--steel); filter: none; }
+
+    /* ---------- Plane selection ---------- */
+    .planes { display: flex; gap: 10px; margin-bottom: 22px; }
+    .plane-card {
+      flex: 1;
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 12px 8px 10px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .plane-card:hover { border-color: var(--steel); }
+    .plane-card.selected {
+      border-color: var(--accent);
+      background: rgba(232, 163, 61, 0.08);
+    }
+    .wing-icon { margin-bottom: 8px; }
+    .wing-icon i {
+      display: block;
+      height: 4px;
+      width: 64%;
+      margin: 3px auto;
+      border-radius: 2px;
+      background: var(--steel);
+    }
+    .plane-card.selected .wing-icon i { background: var(--accent); }
+    .p-name { font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
+    .p-desc { font-size: 11px; color: var(--text-dim); line-height: 1.35; }
   </style>
 </head>
 <body>
@@ -176,6 +211,23 @@
       <div class="modal">
         <h1>BLUE MAX</h1>
         <div class="sub">A modernized 2.5D homage to the 1983 classic</div>
+        <div class="planes">
+          <div class="plane-card" data-plane="mono">
+            <div class="wing-icon"><i></i></div>
+            <div class="p-name">MONOPLANE</div>
+            <div class="p-desc">Fast steering, sluggish climb</div>
+          </div>
+          <div class="plane-card" data-plane="bi">
+            <div class="wing-icon"><i></i><i></i></div>
+            <div class="p-name">BIPLANE</div>
+            <div class="p-desc">The balanced classic</div>
+          </div>
+          <div class="plane-card" data-plane="tri">
+            <div class="wing-icon"><i></i><i></i><i></i></div>
+            <div class="p-name">TRIPLANE</div>
+            <div class="p-desc">Superb climb, slow steering</div>
+          </div>
+        </div>
         <div class="controls">
           <span class="k">← →</span><span class="d">Steer</span>
           <span class="k">↑ ↓</span><span class="d">Climb / Dive</span>
@@ -198,6 +250,7 @@
         <div class="final-label">FINAL SCORE</div>
         <div class="final" id="finalScore">0</div>
         <button id="againBtn">↻&nbsp;&nbsp;FLY AGAIN</button>
+        <button id="changeBtn" class="secondary">✈&nbsp;&nbsp;CHANGE PLANE</button>
       </div>
     </div>
   </div>

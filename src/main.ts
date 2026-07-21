@@ -1,4 +1,4 @@
-import { Game, type Hud } from './game';
+import { Game, type Hud, type PlaneType } from './game';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -20,11 +20,33 @@ const menuEl = $('menu');
 const overEl = $('gameover');
 const hudEl = $('hud');
 
+// ---------------------------------------------------------------- plane selection
+let selectedPlane: PlaneType =
+  (localStorage.getItem('bluemax-plane') as PlaneType) || 'bi';
+if (!['mono', 'bi', 'tri'].includes(selectedPlane)) selectedPlane = 'bi';
+
+const planeCards = Array.from(document.querySelectorAll<HTMLElement>('.plane-card'));
+function refreshPlaneCards(): void {
+  for (const card of planeCards) {
+    card.classList.toggle('selected', card.dataset.plane === selectedPlane);
+  }
+}
+for (const card of planeCards) {
+  card.addEventListener('click', () => {
+    selectedPlane = card.dataset.plane as PlaneType;
+    localStorage.setItem('bluemax-plane', selectedPlane);
+    refreshPlaneCards();
+    game.choosePlane(selectedPlane); // live preview behind the menu
+  });
+}
+refreshPlaneCards();
+game.choosePlane(selectedPlane);
+
 function startGame(): void {
   menuEl.classList.add('hidden');
   overEl.classList.add('hidden');
   hudEl.classList.remove('hidden');
-  game.start();
+  game.start(selectedPlane);
 }
 
 game.onGameOver = (reason, score) => {
@@ -35,6 +57,10 @@ game.onGameOver = (reason, score) => {
 
 $('startBtn').addEventListener('click', startGame);
 $('againBtn').addEventListener('click', startGame);
+$('changeBtn').addEventListener('click', () => {
+  overEl.classList.add('hidden');
+  menuEl.classList.remove('hidden');
+});
 
 function toggleFullscreen(): void {
   if (document.fullscreenElement) void document.exitFullscreen();

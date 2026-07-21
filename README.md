@@ -9,6 +9,15 @@ models are built procedurally from primitives (zero external assets).
 
 ## Gameplay
 
+Pick your airframe on the title screen — the choice is remembered between visits,
+and each handles differently:
+
+| Airframe | Handling |
+|----------|----------|
+| Monoplane | Fastest steering, sluggish climb, dives hard |
+| Biplane | The balanced classic |
+| Triplane | Superb climb, slow steering |
+
 Fly your biplane over scrolling low-poly farmland. Bomb buildings and AA guns,
 dogfight enemy planes at matching altitude, and manage your fuel — line up with a
 runway and **dive to touch down**: the plane rolls out, refuels, and takes off again
