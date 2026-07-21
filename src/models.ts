@@ -125,6 +125,51 @@ export function makeTree(): THREE.Group {
   return g;
 }
 
+/** Industrial hall with sawtooth roof and a chimney (last child, slumps when damaged). */
+export function makeFactory(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(16, 5, 10, 0x7a6a58, 0, 2.5, 0));
+  for (let i = -1; i <= 1; i++) {
+    const seg = box(4.6, 1.6, 10, 0x5d5348, i * 5.2, 5.7, 0);
+    seg.rotation.z = 0.18;
+    g.add(seg);
+  }
+  g.add(box(3.4, 3.4, 3.4, 0x6a5c4c, -8.8, 1.7, 2.5));
+  const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.05, 8, 8), lambert(0x5a4a42));
+  chimney.position.set(6.5, 6.4, -3);
+  chimney.castShadow = true;
+  g.add(chimney);
+  return g;
+}
+
+/** Olive tank; the turret group is the last child so it tilts when damaged. */
+export function makeTank(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(1.2, 0.9, 5.2, 0x3f4a33, -1.7, 0.45, 0));
+  g.add(box(1.2, 0.9, 5.2, 0x3f4a33, 1.7, 0.45, 0));
+  g.add(box(3.2, 1.0, 4.6, 0x55663f, 0, 1.2, 0));
+  const turret = new THREE.Group();
+  turret.position.set(0, 2.0, 0.2);
+  turret.add(box(1.9, 0.9, 2.1, 0x4c5c38));
+  turret.add(box(0.28, 0.28, 3.4, 0x2f3a28, 0, 0.1, -2.4));
+  g.add(turret);
+  return g;
+}
+
+/** Fuel depot: three silver storage tanks — goes up with a big bang. */
+export function makeDepot(): THREE.Group {
+  const g = new THREE.Group();
+  for (let i = 0; i < 3; i++) {
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 7, 10), lambert(0x9aa0a6));
+    drum.rotation.x = Math.PI / 2;
+    drum.position.set((i - 1) * 3.4, 1.5, 0);
+    drum.castShadow = true;
+    g.add(drum);
+  }
+  g.add(box(0.6, 1.4, 6, 0x6a6f74, 5.4, 0.7, 0));
+  return g;
+}
+
 /** Collapsed-building rubble left behind after a kill. */
 export function makeRubble(): THREE.Group {
   const g = new THREE.Group();

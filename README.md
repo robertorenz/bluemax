@@ -39,7 +39,10 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
 
 | Target | Points |
 |--------|--------|
+| Factory | 125 |
 | Enemy plane | 100 |
+| Tank (mobile) | 100 |
+| Fuel depot | 100 |
 | AA gun | 75 |
 | Building | 50 |
 

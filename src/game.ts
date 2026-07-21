@@ -3,7 +3,7 @@ import { AudioFx } from './audio';
 import { P } from './palette';
 import {
   makeBiplane, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
-  makeCloud, makeRubble, type AAGunModel,
+  makeCloud, makeRubble, makeFactory, makeTank, makeDepot, type AAGunModel,
 } from './models';
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
@@ -24,16 +24,28 @@ interface AirEnemy {
   fireAt: number;
 }
 
+type GroundKind = 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot';
+
 interface GroundObj {
   group: THREE.Group;
-  kind: 'building' | 'aagun' | 'runway';
+  kind: GroundKind;
   barrel?: THREE.Group;
   hp: number;
   fireAt: number;
+  vx?: number;
   damaged?: boolean;
   dead?: boolean;
   nextSmokeAt?: number;
 }
+
+const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: number }> = {
+  building: { hp: 2, score: 50, radius: 16 },
+  aagun:    { hp: 1, score: 75, radius: 16 },
+  factory:  { hp: 2, score: 125, radius: 20 },
+  tank:     { hp: 1, score: 100, radius: 14 },
+  depot:    { hp: 1, score: 100, radius: 18 },
+  runway:   { hp: 99, score: 0, radius: 0 },
+};
 
 interface Bullet {
   mesh: THREE.Mesh;
@@ -430,11 +442,19 @@ export class Game {
     }
     if (this.now > this.nextGroundAt) {
       this.nextGroundAt = this.now + 1700 + Math.random() * 1800;
-      this.spawnGroundObj(Math.random() < 0.4 ? 'aagun' : 'building');
+      const r = Math.random();
+      const kind: GroundKind =
+        r < 0.3 ? 'building' :
+        r < 0.52 ? 'aagun' :
+        r < 0.7 ? 'tank' :
+        r < 0.85 ? 'factory' : 'depot';
+      this.spawnGroundObj(kind);
     }
     if (this.now > this.nextRunwayAt) {
-      this.nextRunwayAt = this.now + 15000 + Math.random() * 9000;
-      this.spawnGroundObj('runway');
+      // If targets are blocking the lane right now, retry shortly instead.
+      this.nextRunwayAt = this.spawnGroundObj('runway')
+        ? this.now + 15000 + Math.random() * 9000
+        : this.now + 4000;
     }
   }
 
@@ -455,20 +475,46 @@ export class Game {
     });
   }
 
-  private spawnGroundObj(kind: GroundObj['kind']): void {
+  private spawnGroundObj(kind: GroundKind): boolean {
+    const range = kind === 'runway' ? 20 : 34;
+    let x = (Math.random() - 0.5) * 2 * range;
+    for (let tries = 0; tries < 8 && this.blocksRunwayLane(kind, x); tries++) {
+      x = (Math.random() - 0.5) * 2 * range;
+    }
+    if (this.blocksRunwayLane(kind, x)) return false;
+
     let group: THREE.Group;
     let barrel: THREE.Group | undefined;
+    let vx: number | undefined;
     if (kind === 'building') group = makeBuilding();
     else if (kind === 'runway') group = makeRunway();
-    else {
+    else if (kind === 'factory') group = makeFactory();
+    else if (kind === 'depot') group = makeDepot();
+    else if (kind === 'tank') {
+      group = makeTank();
+      vx = (Math.random() < 0.5 ? -1 : 1) * (3.5 + Math.random() * 3.5);
+    } else {
       const model: AAGunModel = makeAAGun();
       group = model.group;
       barrel = model.barrel;
     }
-    const range = kind === 'runway' ? 20 : 34;
-    group.position.set((Math.random() - 0.5) * 2 * range, 0, -500);
+    group.position.set(x, 0, -500);
     this.scene.add(group);
-    this.groundObjs.push({ group, kind, barrel, hp: kind === 'building' ? 2 : 1, fireAt: this.now + 1500 });
+    this.groundObjs.push({
+      group, kind, barrel, vx,
+      hp: GROUND_STATS[kind].hp,
+      fireAt: this.now + 1500,
+    });
+    return true;
+  }
+
+  /** True when placing here would put a target in a runway lane (or a runway on targets). */
+  private blocksRunwayLane(kind: GroundKind, x: number): boolean {
+    return this.groundObjs.some((o) => {
+      if (kind !== 'runway' && o.kind !== 'runway') return false;
+      // Only objects still near the spawn horizon can overlap the newcomer.
+      return o.group.position.z < -380 && Math.abs(o.group.position.x - x) < 18;
+    });
   }
 
   // ------------------------------------------------------------- entities
@@ -515,6 +561,13 @@ export class Game {
       const o = this.groundObjs[i];
       const pos = o.group.position;
       pos.z += this.scroll * dt;
+
+      // Tanks patrol laterally until knocked out.
+      if (o.kind === 'tank' && o.vx && !o.damaged) {
+        pos.x += o.vx * dt;
+        if (Math.abs(pos.x) > 42) o.vx = -o.vx;
+        o.group.rotation.y = o.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
+      }
 
       // Damaged or destroyed objects trail smoke instead of fighting back.
       if (o.damaged && this.now > (o.nextSmokeAt ?? 0) && pos.z > -420) {
@@ -614,7 +667,7 @@ export class Game {
       if (o.kind === 'runway' || o.dead) continue;
       const pos = o.group.position;
       const dist = Math.hypot(pos.x - at.x, pos.z - at.z);
-      if (dist >= 16) continue;
+      if (dist >= GROUND_STATS[o.kind].radius) continue;
       // Direct hits flatten the target; near misses leave it damaged and burning.
       o.hp -= dist < 9 ? 2 : 1;
       if (o.hp <= 0) this.destroyGroundObj(o);
@@ -640,15 +693,18 @@ export class Game {
   /** Destroyed: score it, then leave burning wreckage on the map instead of vanishing. */
   private destroyGroundObj(o: GroundObj): void {
     const pos = o.group.position;
-    this.explode(pos.clone().setY(2), 22);
-    this.score += o.kind === 'aagun' ? 75 : 50;
+    this.explode(pos.clone().setY(2), o.kind === 'depot' ? 38 : 22);
+    this.score += GROUND_STATS[o.kind].score;
     o.dead = true;
     o.damaged = true;
     o.fireAt = Infinity;
-    if (o.kind === 'building') {
+    if (o.kind === 'building' || o.kind === 'factory') {
       o.group.clear();
-      o.group.add(makeRubble());
+      const rubble = makeRubble();
+      if (o.kind === 'factory') rubble.scale.set(1.7, 1, 1.3);
+      o.group.add(rubble);
     } else {
+      // Tanks, guns, and depots burn out in place.
       o.group.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           (child.material as THREE.MeshLambertMaterial).color.multiplyScalar(0.3);
@@ -760,7 +816,7 @@ export class Game {
     this.camera.position.y = 38 + p.y * 0.22;
     this.camera.position.z = 44;
     // Roll the horizon gently with the player's bank.
-    this.cameraRoll = THREE.MathUtils.damp(this.cameraRoll, this.player.rotation.z * 0.35, 4, dt);
+    this.cameraRoll = THREE.MathUtils.damp(this.cameraRoll, -this.player.rotation.z * 0.35, 4, dt);
     this.camera.up.set(Math.sin(this.cameraRoll), Math.cos(this.cameraRoll), 0);
     this.camera.lookAt(p.x * 0.7, 2 + p.y * 0.35, -90);
   }
