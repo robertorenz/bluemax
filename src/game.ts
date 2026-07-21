@@ -3,7 +3,9 @@ import { AudioFx } from './audio';
 import { P } from './palette';
 import {
   makeBiplane, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
-  makeCloud, makeRubble, makeFactory, makeTank, makeDepot, type AAGunModel,
+  makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
+  makeRiver, makeBridge, makeBrokenBridge, makeShip, riverXAt, RIVER_LEN,
+  type AAGunModel, type RiverParams,
 } from './models';
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
@@ -17,6 +19,7 @@ const GRAVITY = 25;
 interface AirEnemy {
   group: THREE.Group;
   prop: THREE.Mesh;
+  mode: 'attack' | 'overtake';
   alt: number;
   speed: number;
   wobble: number;
@@ -24,7 +27,9 @@ interface AirEnemy {
   fireAt: number;
 }
 
-type GroundKind = 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot';
+type GroundKind =
+  | 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot'
+  | 'river' | 'bridge' | 'ship';
 
 interface GroundObj {
   group: THREE.Group;
@@ -33,6 +38,9 @@ interface GroundObj {
   hp: number;
   fireAt: number;
   vx?: number;
+  vz?: number;
+  river?: RiverParams;
+  host?: GroundObj;
   damaged?: boolean;
   dead?: boolean;
   nextSmokeAt?: number;
@@ -44,6 +52,9 @@ const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: numb
   factory:  { hp: 2, score: 125, radius: 20 },
   tank:     { hp: 1, score: 100, radius: 14 },
   depot:    { hp: 1, score: 100, radius: 18 },
+  bridge:   { hp: 2, score: 150, radius: 16 },
+  ship:     { hp: 1, score: 100, radius: 14 },
+  river:    { hp: 99, score: 0, radius: 0 },
   runway:   { hp: 99, score: 0, radius: 0 },
 };
 
@@ -120,6 +131,8 @@ export class Game {
   private nextEnemyAt = 0;
   private nextGroundAt = 0;
   private nextRunwayAt = 0;
+  private nextRiverAt = 0;
+  private startedAt = 0;
 
   constructor(container: HTMLElement, private hud: Hud) {
     const W = container.clientWidth || window.innerWidth;
@@ -247,6 +260,8 @@ export class Game {
     this.nextEnemyAt = this.now + 2500;
     this.nextGroundAt = this.now + 800;
     this.nextRunwayAt = this.now + 13000;
+    this.nextRiverAt = this.now + 8000;
+    this.startedAt = this.now;
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
     this.mode = 'flying';
@@ -456,19 +471,34 @@ export class Game {
         ? this.now + 15000 + Math.random() * 9000
         : this.now + 4000;
     }
+    if (this.now > this.nextRiverAt) {
+      this.nextRiverAt = this.spawnRiver()
+        ? this.now + 26000 + Math.random() * 14000
+        : this.now + 5000;
+    }
   }
 
   private spawnEnemy(): void {
+    // Deeper into the sortie, some bandits come from behind and overtake you.
+    const fromBehind = this.now - this.startedAt > 45000 && Math.random() < 0.35;
     const { group, prop } = makeBiplane(P.enemyBody, P.enemyWing, 0xeed8d4);
-    group.rotation.y = Math.PI; // flying toward the player
     const alt = 6 + Math.random() * 30;
-    group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, -480);
+    if (fromBehind) {
+      group.rotation.y = 0; // flying away from the camera, faster than you
+      group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, 70);
+    } else {
+      group.rotation.y = Math.PI; // flying toward the player
+      group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, -480);
+    }
     this.scene.add(group);
     this.enemies.push({
       group,
       prop,
+      mode: fromBehind ? 'overtake' : 'attack',
       alt,
-      speed: 35 + Math.random() * 40,
+      speed: fromBehind
+        ? -(WORLD_SPEED * 0.35) - (45 + Math.random() * 30)
+        : 35 + Math.random() * 40,
       wobble: Math.random() * Math.PI * 2,
       hp: 2,
       fireAt: this.now + 1000 + Math.random() * 1500,
@@ -491,7 +521,9 @@ export class Game {
     else if (kind === 'factory') group = makeFactory();
     else if (kind === 'depot') group = makeDepot();
     else if (kind === 'tank') {
-      group = makeTank();
+      const model = makeTank();
+      group = model.group;
+      barrel = model.barrel;
       vx = (Math.random() < 0.5 ? -1 : 1) * (3.5 + Math.random() * 3.5);
     } else {
       const model: AAGunModel = makeAAGun();
@@ -508,13 +540,55 @@ export class Game {
     return true;
   }
 
-  /** True when placing here would put a target in a runway lane (or a runway on targets). */
+  /** True when placing here would collide with a runway or river lane (or vice versa). */
   private blocksRunwayLane(kind: GroundKind, x: number): boolean {
+    const isLane = (k: GroundKind) => k === 'runway' || k === 'river';
     return this.groundObjs.some((o) => {
-      if (kind !== 'runway' && o.kind !== 'runway') return false;
-      // Only objects still near the spawn horizon can overlap the newcomer.
-      return o.group.position.z < -380 && Math.abs(o.group.position.x - x) < 18;
+      if (!isLane(kind) && !isLane(o.kind)) return false;
+      // Rivers are long and meander, so they claim a wider corridor for longer.
+      const margin = kind === 'river' || o.kind === 'river' ? 34 : 18;
+      const zWindow = o.kind === 'river' ? -240 : -380;
+      return o.group.position.z < zWindow && Math.abs(o.group.position.x - x) < margin;
     });
+  }
+
+  /** Meandering river with bridges across it and barges steaming along it. */
+  private spawnRiver(): boolean {
+    const baseX = (Math.random() - 0.5) * 50;
+    if (this.blocksRunwayLane('river', baseX)) return false;
+    const params: RiverParams = {
+      amp: 6 + Math.random() * 8,
+      waveLen: 170 + Math.random() * 130,
+      phase: Math.random() * Math.PI * 2,
+    };
+    const group = makeRiver(params);
+    const centerZ = -500 - RIVER_LEN / 2;
+    group.position.set(baseX, 0, centerZ);
+    this.scene.add(group);
+    const river: GroundObj = { group, kind: 'river', hp: 99, fireAt: Infinity, river: params };
+    this.groundObjs.push(river);
+
+    const bridgeCount = 1 + (Math.random() < 0.45 ? 1 : 0);
+    for (let i = 0; i < bridgeCount; i++) {
+      const rz = -160 + i * 160 + Math.random() * 80;
+      const bridge = makeBridge();
+      bridge.position.set(baseX + riverXAt(params, rz), 0, centerZ + rz);
+      this.scene.add(bridge);
+      this.groundObjs.push({ group: bridge, kind: 'bridge', hp: GROUND_STATS.bridge.hp, fireAt: Infinity });
+    }
+
+    const shipCount = 1 + (Math.random() < 0.5 ? 1 : 0);
+    for (let i = 0; i < shipCount; i++) {
+      const rz = (Math.random() - 0.5) * 360;
+      const ship = makeShip();
+      ship.position.set(baseX + riverXAt(params, rz), 0, centerZ + rz);
+      this.scene.add(ship);
+      this.groundObjs.push({
+        group: ship, kind: 'ship', hp: GROUND_STATS.ship.hp, fireAt: Infinity,
+        host: river, vz: (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 5),
+      });
+    }
+    return true;
   }
 
   // ------------------------------------------------------------- entities
@@ -528,16 +602,24 @@ export class Game {
       e.prop.rotation.z += 45 * dt;
 
       pos.z += (this.scroll * 0.35 + e.speed) * dt;
+
+      // Overtakers race ahead, then swing around and join the attack.
+      if (e.mode === 'overtake' && pos.z < -350) {
+        e.mode = 'attack';
+        e.speed = 35 + Math.random() * 40;
+        e.group.rotation.y = Math.PI;
+      }
+
       // Pursue the player at range, but commit to the attack line on final
       // approach so head-on collisions stay dodgeable.
-      const pursuing = pos.z < -110 ? 1 : 0;
+      const pursuing = e.mode === 'attack' && pos.z < -110 ? 1 : 0;
       pos.x += (THREE.MathUtils.clamp(p.x - pos.x, -1, 1) * 9 * pursuing + Math.sin(e.wobble) * 3) * dt;
       e.alt += THREE.MathUtils.clamp(p.y - e.alt, -1, 1) * 2.4 * pursuing * dt;
       pos.y = e.alt;
       e.group.rotation.z = Math.sin(e.wobble) * 0.15;
 
       // Fire when in the approach window.
-      if (this.now > e.fireAt && pos.z > -280 && pos.z < -30) {
+      if (e.mode === 'attack' && this.now > e.fireAt && pos.z > -280 && pos.z < -30) {
         e.fireAt = this.now + 1500 + Math.random() * 1400;
         const dir = new THREE.Vector3().subVectors(p, pos).normalize().multiplyScalar(85);
         this.spawnBullet(pos.clone(), dir, true);
@@ -569,28 +651,47 @@ export class Game {
         o.group.rotation.y = o.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
       }
 
+      // Barges follow their river's meander, reversing near its ends.
+      if (o.kind === 'ship' && o.host?.river && o.vz && !o.damaged) {
+        pos.z += o.vz * dt;
+        const rel = pos.z - o.host.group.position.z;
+        if (Math.abs(rel) > RIVER_LEN / 2 - 30) o.vz = -o.vz;
+        pos.x = o.host.group.position.x + riverXAt(o.host.river, rel);
+        o.group.rotation.y = o.vz > 0 ? Math.PI : 0;
+      }
+
       // Damaged or destroyed objects trail smoke instead of fighting back.
       if (o.damaged && this.now > (o.nextSmokeAt ?? 0) && pos.z > -420) {
         o.nextSmokeAt = this.now + (o.dead ? 100 : 190);
         this.spawnSmoke(pos, o.dead ? 1.3 : 0.8);
       }
 
-      if (o.kind === 'aagun' && o.barrel && !o.damaged) {
-        // Track the player with the barrel.
+      if ((o.kind === 'aagun' || o.kind === 'tank') && o.barrel && !o.damaged) {
+        // Track the player: AA guns swivel their whole mount, tanks just the turret.
         const toPlayer = new THREE.Vector3().subVectors(p, pos);
-        o.group.rotation.y = Math.atan2(-toPlayer.x, -toPlayer.z) + Math.PI;
-        const horiz = Math.hypot(toPlayer.x, toPlayer.z);
-        o.barrel.rotation.x = Math.atan2(p.y - 2.3, horiz) + Math.PI / 2 - 0.4;
+        const yaw = Math.atan2(-toPlayer.x, -toPlayer.z) + Math.PI;
+        if (o.kind === 'aagun') {
+          o.group.rotation.y = yaw;
+          const horiz = Math.hypot(toPlayer.x, toPlayer.z);
+          o.barrel.rotation.x = Math.atan2(p.y - 2.3, horiz) + Math.PI / 2 - 0.4;
+        } else {
+          o.barrel.rotation.y = yaw - o.group.rotation.y;
+        }
 
-        if (this.now > o.fireAt && pos.z > -320 && pos.z < -20) {
-          o.fireAt = this.now + 2000 + Math.random() * 1400;
+        const tank = o.kind === 'tank';
+        const zMin = tank ? -260 : -320;
+        if (this.now > o.fireAt && pos.z > zMin && pos.z < -20) {
+          o.fireAt = this.now + (tank ? 3400 + Math.random() * 1600 : 2000 + Math.random() * 1400);
           const muzzle = pos.clone().setY(2.5);
-          const dir = new THREE.Vector3().subVectors(p, muzzle).normalize().multiplyScalar(70);
+          const dir = new THREE.Vector3()
+            .subVectors(p, muzzle)
+            .normalize()
+            .multiplyScalar(tank ? 58 : 70);
           this.spawnBullet(muzzle, dir, true, P.flak);
         }
       }
 
-      if (pos.z > 140) {
+      if (pos.z > (o.kind === 'river' ? 400 : 140)) {
         this.scene.remove(o.group);
         this.groundObjs.splice(i, 1);
       }
@@ -664,7 +765,7 @@ export class Game {
   private detonate(at: THREE.Vector3): void {
     this.explode(at, 26);
     for (const o of this.groundObjs) {
-      if (o.kind === 'runway' || o.dead) continue;
+      if (o.kind === 'runway' || o.kind === 'river' || o.dead) continue;
       const pos = o.group.position;
       const dist = Math.hypot(pos.x - at.x, pos.z - at.z);
       if (dist >= GROUND_STATS[o.kind].radius) continue;
@@ -703,6 +804,9 @@ export class Game {
       const rubble = makeRubble();
       if (o.kind === 'factory') rubble.scale.set(1.7, 1, 1.3);
       o.group.add(rubble);
+    } else if (o.kind === 'bridge') {
+      o.group.clear();
+      o.group.add(makeBrokenBridge());
     } else {
       // Tanks, guns, and depots burn out in place.
       o.group.traverse((child) => {
@@ -711,6 +815,7 @@ export class Game {
         }
       });
       if (o.barrel) o.barrel.rotation.x = 1.5; // barrel slumps
+      if (o.kind === 'ship') o.group.position.y = -0.55; // settles into the water
     }
   }
 

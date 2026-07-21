@@ -33,15 +33,21 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
   while you're on the ground and the camera banks with your turns in flight.
 - **Damage states** — a direct bomb hit flattens a target; a near miss leaves it
   charred, smoking, and out of action. Wreckage stays on the map instead of vanishing.
+- **Rivers** — meandering rivers appear from time to time, crossed by bombable
+  bridges and patrolled by barges that steam along the bends.
+- **Overtakers** — a minute into the sortie, some enemy planes come from *behind*,
+  blow past you, then swing around and attack head-on.
 - **Ground contact** — touching the ground away from a runway is a crash.
 
 ## Scoring
 
 | Target | Points |
 |--------|--------|
+| Bridge | 150 |
 | Factory | 125 |
 | Enemy plane | 100 |
-| Tank (mobile) | 100 |
+| Tank (mobile, fires back) | 100 |
+| Ship (river barge) | 100 |
 | Fuel depot | 100 |
 | AA gun | 75 |
 | Building | 50 |

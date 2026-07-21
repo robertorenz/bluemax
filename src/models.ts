@@ -112,16 +112,131 @@ export function makeRunway(): THREE.Group {
   return g;
 }
 
+/** Random tree: pine, broadleaf, poplar, or bush. */
 export function makeTree(): THREE.Group {
   const g = new THREE.Group();
+  const s = 0.8 + Math.random() * 0.7;
+  const kind = Math.random();
+
+  if (kind >= 0.9) {
+    // Low bush, no trunk.
+    const bush = new THREE.Mesh(new THREE.SphereGeometry(1.3 * s, 7, 5), lambert(0x3d5c33));
+    bush.scale.y = 0.6;
+    bush.position.y = 0.7 * s;
+    bush.castShadow = true;
+    g.add(bush);
+    return g;
+  }
+
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.38, 1.3, 6), lambert(P.treeTrunk));
   trunk.position.y = 0.65;
   g.add(trunk);
-  const s = 0.8 + Math.random() * 0.7;
-  const top = new THREE.Mesh(new THREE.ConeGeometry(1.7 * s, 3.4 * s, 7), lambert(P.treeTop));
-  top.position.y = 1.2 + 1.7 * s;
-  top.castShadow = true;
-  g.add(top);
+
+  if (kind < 0.4) {
+    // Pine.
+    const top = new THREE.Mesh(new THREE.ConeGeometry(1.7 * s, 3.4 * s, 7), lambert(P.treeTop));
+    top.position.y = 1.2 + 1.7 * s;
+    top.castShadow = true;
+    g.add(top);
+  } else if (kind < 0.72) {
+    // Broadleaf: a cluster of leafy blobs.
+    const shades = [0x3f6b32, 0x4a7a3a, 0x35592b];
+    for (let i = 0; i < 3; i++) {
+      const blob = new THREE.Mesh(new THREE.SphereGeometry((1.0 + Math.random() * 0.6) * s, 7, 5), lambert(shades[i]));
+      blob.position.set((Math.random() - 0.5) * 1.4 * s, (1.9 + Math.random() * 1.1) * s, (Math.random() - 0.5) * 1.4 * s);
+      blob.castShadow = true;
+      g.add(blob);
+    }
+  } else {
+    // Poplar: tall and narrow.
+    const top = new THREE.Mesh(new THREE.ConeGeometry(0.9 * s, 5.4 * s, 7), lambert(0x46703a));
+    top.position.y = 1.1 + 2.7 * s;
+    top.castShadow = true;
+    g.add(top);
+  }
+  return g;
+}
+
+export interface RiverParams {
+  amp: number;
+  waveLen: number;
+  phase: number;
+}
+
+export const RIVER_LEN = 480;
+export const RIVER_WIDTH = 14;
+
+/** X offset of the river centerline at a z-position relative to the river's center. */
+export function riverXAt(params: RiverParams, relZ: number): number {
+  return params.amp * Math.sin((relZ * Math.PI * 2) / params.waveLen + params.phase);
+}
+
+/** Meandering river strip, built as one vertex-strip mesh. */
+export function makeRiver(params: RiverParams): THREE.Group {
+  const g = new THREE.Group();
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const step = 20;
+  // Ends taper to a point so the river doesn't cut off in a blunt square.
+  const halfW = (z: number) =>
+    (RIVER_WIDTH / 2) *
+    Math.max(0.05, Math.min((z + RIVER_LEN / 2) / 70, (RIVER_LEN / 2 - z) / 70, 1));
+  for (let z = -RIVER_LEN / 2; z < RIVER_LEN / 2; z += step) {
+    const c0 = riverXAt(params, z);
+    const c1 = riverXAt(params, z + step);
+    const w0 = halfW(z);
+    const w1 = halfW(z + step);
+    const quad = [
+      [c0 - w0, z], [c1 - w1, z + step], [c1 + w1, z + step],
+      [c0 - w0, z], [c1 + w1, z + step], [c0 + w0, z],
+    ];
+    for (const [x, zz] of quad) {
+      positions.push(x, 0.06, zz);
+      normals.push(0, 1, 0);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x3d6b96 }));
+  mesh.receiveShadow = true;
+  g.add(mesh);
+  return g;
+}
+
+/** Road bridge spanning the river along x. */
+export function makeBridge(): THREE.Group {
+  const g = new THREE.Group();
+  for (const px of [-5, 5]) g.add(box(1.2, 3.4, 1.6, 0x5d5348, px, 1.7, 0));
+  for (const px of [-13, 13]) g.add(box(4.5, 3.4, 6, 0x6b5f4e, px, 1.7, 0));
+  g.add(box(30, 0.9, 5, 0x7a6a55, 0, 3.8, 0));
+  for (const rz of [-2.2, 2.2]) g.add(box(30, 0.7, 0.25, 0x4d4438, 0, 4.6, rz));
+  return g;
+}
+
+/** Collapsed bridge: charred abutments and deck stubs dropped into the water. */
+export function makeBrokenBridge(): THREE.Group {
+  const g = new THREE.Group();
+  for (const px of [-13, 13]) g.add(box(4.5, 3.4, 6, 0x3a332c, px, 1.7, 0));
+  const left = box(9, 0.8, 5, 0x40382e, -8.5, 2.6, 0);
+  left.rotation.z = -0.4;
+  g.add(left);
+  const right = box(9, 0.8, 5, 0x40382e, 8.5, 2.6, 0);
+  right.rotation.z = 0.4;
+  g.add(right);
+  return g;
+}
+
+/** River barge; the funnel is the last child so it tilts when damaged. */
+export function makeShip(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(3, 1.1, 9, 0x4a4740, 0, 0.75, 0));
+  g.add(box(2.4, 0.6, 6.6, 0x6b675c, 0, 1.55, -0.5));
+  g.add(box(1.7, 1.5, 2.1, 0x8a4a3a, 0, 2.2, 2.9));
+  const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.4, 1.7, 8), lambert(0x2f3540));
+  funnel.position.set(0, 3.3, 2.6);
+  funnel.castShadow = true;
+  g.add(funnel);
   return g;
 }
 
@@ -142,8 +257,8 @@ export function makeFactory(): THREE.Group {
   return g;
 }
 
-/** Olive tank; the turret group is the last child so it tilts when damaged. */
-export function makeTank(): THREE.Group {
+/** Olive tank; the turret aims independently of the driving hull. */
+export function makeTank(): AAGunModel {
   const g = new THREE.Group();
   g.add(box(1.2, 0.9, 5.2, 0x3f4a33, -1.7, 0.45, 0));
   g.add(box(1.2, 0.9, 5.2, 0x3f4a33, 1.7, 0.45, 0));
@@ -153,7 +268,7 @@ export function makeTank(): THREE.Group {
   turret.add(box(1.9, 0.9, 2.1, 0x4c5c38));
   turret.add(box(0.28, 0.28, 3.4, 0x2f3a28, 0, 0.1, -2.4));
   g.add(turret);
-  return g;
+  return { group: g, barrel: turret };
 }
 
 /** Fuel depot: three silver storage tanks — goes up with a big bang. */
