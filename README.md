@@ -1,14 +1,15 @@
 # Blue Max
 
-A modernized homage to **Blue Max** (Synapse Software, 1983) — the classic isometric
-WWI biplane shooter. Built with **Phaser 3 + TypeScript + Vite**, with all graphics
-generated procedurally at runtime (zero external assets).
+A modernized 2.5D homage to **Blue Max** (Synapse Software, 1983) — the classic
+isometric WWI biplane shooter. Built with **Three.js + TypeScript + Vite**: a real-time
+low-poly 3D world with a tilted chase camera, dynamic shadows, and distance fog. All
+models are built procedurally from primitives (zero external assets).
 
 **▶ Play it now: [robertorenz.github.io/bluemax](https://robertorenz.github.io/bluemax/)**
 
 ## Gameplay
 
-Fly your biplane over diagonally scrolling farmland. Bomb buildings and AA guns,
+Fly your biplane over scrolling low-poly farmland. Bomb buildings and AA guns,
 dogfight enemy planes at matching altitude, and manage your fuel — make a **low pass
 over a runway** to refuel before the tank runs dry.
 
@@ -21,8 +22,8 @@ over a runway** to refuel before the tank runs dry.
 
 **Mechanics carried over from the original:**
 
-- **Altitude matters** — your shadow shows your height; guns only hit enemies near
-  your altitude, and bombs dropped from low altitude land more accurately.
+- **Altitude matters** — your real cast shadow shows your height; you can only hit
+  enemies near your altitude, and bombs dropped from low altitude land more accurately.
 - **Fuel management** — fuel drains constantly; running dry forces you into a descent.
 - **Ground contact** — touching the ground away from a runway is a crash.
 
@@ -49,6 +50,8 @@ Pushes to `master` auto-deploy to GitHub Pages via the workflow in
 
 ## Stack
 
-- [Phaser 3](https://phaser.io/) — game framework (scenes, tilesprites, particles)
+- [Three.js](https://threejs.org/) — WebGL renderer (low-poly meshes, directional
+  shadows, fog, vertex-colored terrain chunks)
 - [TypeScript](https://www.typescriptlang.org/) — strict mode
 - [Vite](https://vitejs.dev/) — dev server + bundler
+- DOM/CSS HUD and modal overlays (no in-canvas UI)

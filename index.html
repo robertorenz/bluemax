@@ -6,6 +6,16 @@
   <title>Blue Max</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --panel: #1e2d3b;
+      --panel-border: #39516a;
+      --text: #d8e4ee;
+      --text-dim: #8fa6b8;
+      --accent: #e8a33d;
+      --danger: #c4574a;
+      --good: #6da85e;
+      --steel: #7fa8c9;
+    }
     html, body {
       height: 100%;
       background: #131c26;
@@ -15,15 +25,170 @@
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       overflow: hidden;
     }
-    #game {
+    #app {
+      position: relative;
+      width: 960px;
+      height: 640px;
       box-shadow: 0 12px 48px rgba(0, 0, 0, 0.6);
       border-radius: 6px;
       overflow: hidden;
     }
+    #app canvas { display: block; }
+    .hidden { display: none !important; }
+
+    /* ---------- HUD ---------- */
+    #hud {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: rgba(30, 45, 59, 0.82);
+      border-bottom: 1px solid var(--panel-border);
+      color: var(--text);
+      user-select: none;
+    }
+    #hud .left { display: flex; align-items: center; gap: 18px; }
+    #score { font-size: 19px; font-weight: 700; letter-spacing: 1px; }
+    #lives { color: var(--steel); font-size: 18px; letter-spacing: 4px; }
+    #hud .gauges { display: flex; flex-direction: column; gap: 6px; width: 250px; }
+    .gauge { display: flex; align-items: center; gap: 8px; }
+    .gauge label {
+      width: 36px; font-size: 10px; font-weight: 600;
+      color: var(--text-dim); letter-spacing: 1px; text-align: right;
+    }
+    .bar {
+      flex: 1; height: 9px;
+      background: #0e161e;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar > div { height: 100%; border-radius: 3px; transition: width 0.12s linear; }
+    #fuelbar { background: var(--good); width: 100%; }
+    #altbar { background: var(--steel); width: 60%; }
+    .gauge .val { width: 30px; font-size: 12px; font-weight: 700; }
+
+    #refuel {
+      position: absolute;
+      top: 66px; left: 50%;
+      transform: translateX(-50%);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 2px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+      animation: pulse 0.8s ease-in-out infinite alternate;
+    }
+    @keyframes pulse { from { opacity: 1; } to { opacity: 0.45; } }
+
+    /* ---------- Modals ---------- */
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10, 16, 22, 0.62);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .modal {
+      width: 480px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 36px 40px;
+      text-align: center;
+      color: var(--text);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+    }
+    .modal h1 {
+      font-size: 44px;
+      letter-spacing: 10px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    .modal h2 { font-size: 32px; letter-spacing: 3px; color: var(--danger); margin-bottom: 12px; }
+    .modal .sub { color: var(--text-dim); font-size: 14px; margin-bottom: 22px; }
+    .controls {
+      display: grid;
+      grid-template-columns: auto auto;
+      gap: 6px 18px;
+      justify-content: center;
+      margin-bottom: 22px;
+      font-size: 14px;
+    }
+    .controls .k { color: var(--accent); font-weight: 700; text-align: right; }
+    .controls .d { text-align: left; }
+    .hint { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; line-height: 1.5; }
+    .modal .final { font-size: 42px; font-weight: 800; color: var(--accent); margin-bottom: 24px; }
+    .modal .final-label { font-size: 12px; color: var(--text-dim); letter-spacing: 2px; }
+    button {
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #16212c;
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      padding: 12px 34px;
+      cursor: pointer;
+      transition: filter 0.15s;
+    }
+    button:hover { filter: brightness(1.12); }
   </style>
 </head>
 <body>
-  <div id="game"></div>
+  <div id="app">
+    <div id="hud" class="hidden">
+      <div class="left">
+        <span id="score">SCORE 0</span>
+        <span id="lives">✈ ✈ ✈</span>
+      </div>
+      <div class="gauges">
+        <div class="gauge">
+          <label>FUEL</label>
+          <div class="bar"><div id="fuelbar"></div></div>
+        </div>
+        <div class="gauge">
+          <label>ALT</label>
+          <div class="bar"><div id="altbar"></div></div>
+          <span class="val" id="altval">15</span>
+        </div>
+      </div>
+    </div>
+    <div id="refuel" class="hidden">REFUELING</div>
+
+    <div id="menu" class="overlay">
+      <div class="modal">
+        <h1>BLUE MAX</h1>
+        <div class="sub">A modernized 2.5D homage to the 1983 classic</div>
+        <div class="controls">
+          <span class="k">← →</span><span class="d">Steer</span>
+          <span class="k">↑ ↓</span><span class="d">Climb / Dive</span>
+          <span class="k">SPACE</span><span class="d">Machine guns</span>
+          <span class="k">B</span><span class="d">Drop bomb</span>
+        </div>
+        <div class="hint">
+          Bomb targets, dogfight at matching altitude,<br />
+          and make low passes over runways to refuel.
+        </div>
+        <button id="startBtn">▶&nbsp;&nbsp;TAKE OFF</button>
+      </div>
+    </div>
+
+    <div id="gameover" class="overlay hidden">
+      <div class="modal">
+        <h2 id="overReason">SHOT DOWN</h2>
+        <div class="final-label">FINAL SCORE</div>
+        <div class="final" id="finalScore">0</div>
+        <button id="againBtn">↻&nbsp;&nbsp;FLY AGAIN</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
