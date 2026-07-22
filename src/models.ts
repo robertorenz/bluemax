@@ -322,23 +322,36 @@ export function riverXAt(p: RiverParams, relZ: number): number {
   return wander + p.sideIn * EDGE_PUSH * tIn + p.sideOut * EDGE_PUSH * tOut;
 }
 
-/** Winding lane strip (river or road) built as one vertex-strip mesh. */
+/**
+ * Winding lane strip (river or road) built as one vertex-strip mesh.
+ * Edges are offset perpendicular to the local path direction so the lane
+ * keeps a constant true width through every bend.
+ */
 function makeLaneStrip(params: RiverParams, width: number, color: number, y: number): THREE.Mesh {
   const positions: number[] = [];
   const normals: number[] = [];
-  const step = 24;
+  const step = 18;
   // Ends taper to a point so the lane doesn't cut off in a blunt square.
   const halfW = (z: number) =>
     (width / 2) *
     Math.max(0.05, Math.min((z + RIVER_LEN / 2) / 90, (RIVER_LEN / 2 - z) / 90, 1));
+  // Unit normal (perpendicular in the ground plane) of the path at z.
+  const edgeNormal = (z: number): { nx: number; nz: number } => {
+    const dx = riverXAt(params, z + 6) - riverXAt(params, z - 6);
+    const len = Math.hypot(dx, 12);
+    return { nx: 12 / len, nz: -dx / len };
+  };
   for (let z = -RIVER_LEN / 2; z < RIVER_LEN / 2; z += step) {
+    const z1 = z + step;
     const c0 = riverXAt(params, z);
-    const c1 = riverXAt(params, z + step);
+    const c1 = riverXAt(params, z1);
+    const n0 = edgeNormal(z);
+    const n1 = edgeNormal(z1);
     const w0 = halfW(z);
-    const w1 = halfW(z + step);
+    const w1 = halfW(z1);
     const quad = [
-      [c0 - w0, z], [c1 - w1, z + step], [c1 + w1, z + step],
-      [c0 - w0, z], [c1 + w1, z + step], [c0 + w0, z],
+      [c0 - n0.nx * w0, z - n0.nz * w0], [c1 - n1.nx * w1, z1 - n1.nz * w1], [c1 + n1.nx * w1, z1 + n1.nz * w1],
+      [c0 - n0.nx * w0, z - n0.nz * w0], [c1 + n1.nx * w1, z1 + n1.nz * w1], [c0 + n0.nx * w0, z + n0.nz * w0],
     ];
     for (const [x, zz] of quad) {
       positions.push(x, y, zz);
