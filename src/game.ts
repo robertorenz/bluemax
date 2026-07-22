@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AudioFx } from './audio';
 import { P } from './palette';
 import {
-  makePlane, makeBlimp, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
+  makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneShape,
@@ -263,7 +263,7 @@ export class Game {
     this.maxBombs = def.bombs;
     const pos = this.player?.position.clone();
     if (this.player) this.scene.remove(this.player);
-    const { group, prop } = makePlane(def.shape, def.body, def.wing, def.detail, { mouth: def.mouth });
+    const { group, prop } = makePlane(def.form, def.body, def.wing, def.detail);
     group.position.copy(pos ?? new THREE.Vector3(0, this.alt, PLAYER_Z));
     group.scale.setScalar(1.25); // offset the extra camera distance
     this.player = group;
@@ -330,6 +330,15 @@ export class Game {
   /** Current ground-scroll speed; the world slows while rolling down a runway. */
   private get scroll(): number {
     return WORLD_SPEED * this.speedFactor;
+  }
+
+  /** Touch-control hooks: virtual buttons feed the same key set as the keyboard. */
+  press(key: string): void {
+    this.keys.add(key);
+  }
+
+  release(key: string): void {
+    this.keys.delete(key);
   }
 
   update(dt: number, now: number): void {
@@ -583,7 +592,7 @@ export class Game {
     const { group, prop } =
       kind === 'blimp'
         ? makeBlimp()
-        : makePlane(info.shape as PlaneShape, info.body, info.wing, 0xeed8d4);
+        : makePlane(ENEMY_FORMS[info.shape as PlaneShape], info.body, info.wing, 0xeed8d4);
 
     const alt = kind === 'blimp' ? 22 + Math.random() * 12 : 6 + Math.random() * 30;
     if (fromBehind) {

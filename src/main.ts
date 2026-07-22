@@ -62,7 +62,7 @@ function makePlaneThumbs(): Record<string, string> {
   const ctx = copy.getContext('2d')!;
   const thumbs: Record<string, string> = {};
   for (const def of PLANES) {
-    const { group } = makePlane(def.shape, def.body, def.wing, def.detail, { mouth: def.mouth });
+    const { group } = makePlane(def.form, def.body, def.wing, def.detail);
     scene.add(group);
     renderer.render(scene, cam);
     ctx.clearRect(0, 0, W, H);
@@ -246,6 +246,67 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && game.state !== 'playing') startGame();
   if (e.key.toLowerCase() === 'f' && !e.repeat) toggleFullscreen();
 });
+
+// ---------------------------------------------------------------- touch controls
+
+function setupTouch(): void {
+  if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) return;
+  const touchEl = $('touch');
+  const stick = $('stick');
+  const nub = $('stickNub');
+  touchEl.classList.remove('hidden');
+
+  const DEAD = 14; // px of drag before a direction engages
+  const held = new Set<string>();
+  const setDir = (key: string, on: boolean) => {
+    if (on && !held.has(key)) {
+      held.add(key);
+      game.press(key);
+    } else if (!on && held.has(key)) {
+      held.delete(key);
+      game.release(key);
+    }
+  };
+
+  let origin: { x: number; y: number } | null = null;
+  const handle = (e: TouchEvent) => {
+    e.preventDefault();
+    const t = e.targetTouches[0];
+    if (!t) return;
+    if (!origin) origin = { x: t.clientX, y: t.clientY };
+    const dx = t.clientX - origin.x;
+    const dy = t.clientY - origin.y;
+    const clamp = (v: number) => Math.max(-44, Math.min(44, v));
+    nub.style.transform = `translate(${clamp(dx)}px, ${clamp(dy)}px)`;
+    setDir('ArrowLeft', dx < -DEAD);
+    setDir('ArrowRight', dx > DEAD);
+    setDir('ArrowUp', dy < -DEAD);   // drag up = climb
+    setDir('ArrowDown', dy > DEAD);
+  };
+  stick.addEventListener('touchstart', handle, { passive: false });
+  stick.addEventListener('touchmove', handle, { passive: false });
+  stick.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    origin = null;
+    nub.style.transform = '';
+    for (const key of [...held]) setDir(key, false);
+  });
+
+  const bindButton = (id: string, key: string) => {
+    const el = $(id);
+    el.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      game.press(key);
+    }, { passive: false });
+    el.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      game.release(key);
+    });
+  };
+  bindButton('fireBtn', ' ');
+  bindButton('bombBtn', 'b');
+}
+setupTouch();
 
 // Fixed-ish timestep loop with a delta clamp so tab-switches don't teleport things.
 let last = performance.now();

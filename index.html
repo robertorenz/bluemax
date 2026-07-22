@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Blue Max</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -26,7 +26,58 @@
       position: fixed;
       inset: 0;
       overflow: hidden;
+      touch-action: none;
     }
+
+    /* ---------- Touch controls ---------- */
+    #touch {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+    }
+    #stick {
+      position: absolute;
+      left: 26px;
+      bottom: 26px;
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: rgba(30, 45, 59, 0.45);
+      border: 1px solid var(--panel-border);
+      pointer-events: auto;
+    }
+    #stickNub {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 54px;
+      height: 54px;
+      margin: -27px 0 0 -27px;
+      border-radius: 50%;
+      background: rgba(127, 168, 201, 0.55);
+      border: 1px solid var(--steel);
+    }
+    .touch-buttons {
+      position: absolute;
+      right: 24px;
+      bottom: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      pointer-events: auto;
+    }
+    .touch-btn {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      font-size: 28px;
+      padding: 0;
+      background: rgba(30, 45, 59, 0.55);
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+    }
+    .touch-btn:active { background: rgba(232, 163, 61, 0.4); }
     #app canvas { display: block; }
     .hidden { display: none !important; }
 
@@ -269,6 +320,14 @@
       </div>
     </div>
     <div id="refuel" class="hidden">REFUELING</div>
+
+    <div id="touch" class="hidden">
+      <div id="stick"><div id="stickNub"></div></div>
+      <div class="touch-buttons">
+        <button id="bombBtn" class="touch-btn">💣</button>
+        <button id="fireBtn" class="touch-btn">🔥</button>
+      </div>
+    </div>
 
     <div id="menu" class="overlay">
       <div class="modal">

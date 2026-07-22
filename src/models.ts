@@ -19,87 +19,159 @@ export interface PlaneModel {
   prop: THREE.Mesh;
 }
 
-/** Geometry archetypes the whole hangar is built from. */
-export type PlaneShape = 'mono' | 'bi' | 'tri' | 'bisleek' | 'ww2';
+/** Enemy archetype ids kept for the red air force. */
+export type PlaneShape = 'mono' | 'bi' | 'tri';
+
+/** Geometry recipe for one aircraft — enough knobs to make each type recognizable. */
+export interface PlaneForm {
+  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby';
+  nose: 'flat' | 'spinner' | 'radial' | 'chin';
+  wings: { y: number; span: number; chord: number; stagger?: number }[];
+  struts?: 'none' | 'pair' | 'quad';
+  gear?: 'open' | 'spat';
+  canopy?: 'none' | 'hump' | 'closed' | 'bubble';
+  headrest?: boolean;
+  scoop?: boolean;    // ventral radiator scoop
+  mouth?: boolean;    // shark-mouth nose art
+  axleWing?: boolean; // Fokker Dr.I stub wing between the wheels
+  gunner?: boolean;   // rear observer cockpit
+}
 
 /**
- * Low-poly military plane, nose pointing toward -z (the direction of flight).
- * Origin sits at the fuselage centerline so altitude == group.position.y.
+ * Low-poly military plane assembled from a PlaneForm recipe; nose points
+ * toward -z. Origin sits at the fuselage centerline so altitude == position.y.
  */
-export function makePlane(
-  shape: PlaneShape,
-  body: number,
-  wing: number,
-  detail: number,
-  opts: { mouth?: boolean } = {},
-): PlaneModel {
+export function makePlane(form: PlaneForm, body: number, wing: number, detail: number): PlaneModel {
   const g = new THREE.Group();
 
-  g.add(box(1.1, 1.0, 5.2, body, 0, 0.9, 0));           // fuselage
+  // Fuselage.
+  let noseZ = -2.7;
+  if (form.fuselage === 'round') {
+    const f = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.42, 5.6, 10), lambert(body));
+    f.rotation.x = Math.PI / 2;
+    f.position.set(0, 0.95, 0.1);
+    f.castShadow = true;
+    g.add(f);
+  } else if (form.fuselage === 'slim') {
+    g.add(box(0.95, 0.95, 6.2, body, 0, 0.9, 0.2));
+    noseZ = -2.9;
+  } else if (form.fuselage === 'deep') {
+    g.add(box(1.3, 1.15, 6, body, 0, 0.95, 0.1));
+    noseZ = -2.9;
+  } else if (form.fuselage === 'stubby') {
+    g.add(box(1.4, 1.25, 4.0, body, 0, 0.95, 0.2));
+    noseZ = -1.9;
+  } else {
+    g.add(box(1.1, 1.0, 5.2, body, 0, 0.9, 0));
+  }
 
-  if (shape === 'mono') {
-    g.add(box(10.5, 0.24, 2.2, wing, 0, 0.95, -0.6));    // single shoulder wing
-  } else if (shape === 'bi') {
-    g.add(box(9, 0.22, 1.9, wing, 0, 1.95, -0.7));       // upper wing
-    g.add(box(8, 0.22, 1.7, wing, 0, 0.3, -0.6));        // lower wing
-    for (const sx of [-3.1, -1.2, 1.2, 3.1]) {           // struts
-      g.add(box(0.12, 1.6, 0.12, detail, sx, 1.1, -0.7));
-    }
-  } else if (shape === 'tri') {
-    g.add(box(7, 0.22, 1.6, wing, 0, 0.25, -0.55));      // bottom wing
-    g.add(box(8.4, 0.22, 1.8, wing, 0, 1.4, -0.65));     // middle wing
-    g.add(box(7.4, 0.22, 1.6, wing, 0, 2.55, -0.7));     // top wing
-    for (const sx of [-2.6, -1.1, 1.1, 2.6]) {           // tall struts
-      g.add(box(0.12, 2.3, 0.12, detail, sx, 1.4, -0.62));
-    }
-  } else if (shape === 'bisleek') {
-    // Sleek fighter: narrow staggered wings, single strut pair.
-    g.add(box(9.4, 0.2, 1.7, wing, 0, 1.7, -0.85));      // upper wing, forward stagger
-    g.add(box(8.4, 0.2, 1.5, wing, 0, 0.35, -0.45));     // lower wing
-    for (const sx of [-2.9, 2.9]) {
-      g.add(box(0.12, 1.35, 0.12, detail, sx, 1.0, -0.65));
+  // Nose treatment.
+  if (form.nose === 'radial') {
+    const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.82, 0.95, 12), lambert(0x3a4046));
+    cowl.rotation.x = Math.PI / 2;
+    cowl.position.set(0, 0.95, noseZ + 0.25);
+    cowl.castShadow = true;
+    g.add(cowl);
+  } else if (form.nose === 'spinner' || form.nose === 'chin') {
+    const spin = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.85, 10), lambert(0x2b3238));
+    spin.rotation.x = -Math.PI / 2;
+    spin.position.set(0, 0.95, noseZ - 0.3);
+    g.add(spin);
+    if (form.nose === 'chin') {
+      g.add(box(0.85, 0.55, 1.6, 0x3a4046, 0, 0.35, noseZ + 0.9)); // chin radiator
     }
   } else {
-    // WWII-era: beefy low-wing monoplane with a closed canopy.
-    g.add(box(1.3, 1.15, 6, body, 0, 0.95, 0.1));        // deeper fuselage
-    g.add(box(11, 0.26, 2.5, wing, 0, 0.5, -0.3));       // low wing
-    g.add(box(0.95, 0.55, 1.7, 0x2b3238, 0, 1.7, 0.4));  // canopy
-    if (opts.mouth) {
-      g.add(box(0.95, 0.4, 1.2, 0xe8e4da, 0, 0.5, -2.35));  // shark teeth (white)
-      g.add(box(1.0, 0.14, 1.25, 0xa33226, 0, 0.5, -2.34)); // gum line (red)
+    const spin = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 8), lambert(0x2b3238));
+    spin.rotation.x = -Math.PI / 2;
+    spin.position.set(0, 0.9, noseZ - 0.15);
+    g.add(spin);
+  }
+  if (form.mouth) {
+    g.add(box(0.95, 0.4, 1.2, 0xe8e4da, 0, 0.5, noseZ + 0.55));
+    g.add(box(1.0, 0.14, 1.25, 0xa33226, 0, 0.5, noseZ + 0.56));
+  }
+  if (form.scoop) {
+    g.add(box(0.7, 0.5, 1.9, 0x3a4046, 0, 0.22, 0.9));
+  }
+
+  // Wings.
+  for (const w of form.wings) {
+    g.add(box(w.span, 0.22, w.chord, wing, 0, w.y, -0.6 + (w.stagger ?? 0)));
+  }
+  if (form.axleWing) g.add(box(2.7, 0.14, 0.9, wing, 0, -0.15, -0.85));
+
+  // Struts between the highest and lowest wings.
+  const ys = form.wings.map((w) => w.y);
+  if (form.struts && form.struts !== 'none' && ys.length >= 2) {
+    const top = Math.max(...ys);
+    const bottom = Math.min(...ys);
+    const xs = form.struts === 'pair' ? [-2.9, 2.9] : [-3.0, -1.15, 1.15, 3.0];
+    for (const sx of xs) {
+      g.add(box(0.12, top - bottom + 0.2, 0.12, detail, sx, (top + bottom) / 2, -0.65));
     }
   }
 
-  g.add(box(3.2, 0.15, 1.2, wing, 0, 1.0, 2.5));         // tailplane
-  g.add(box(0.15, 1.15, 1.2, body, 0, 1.55, 2.6));       // fin
-  g.add(box(0.7, 0.45, 0.9, detail, 0, 1.45, 0.35));     // cockpit rim
+  // Tail.
+  g.add(box(3.2, 0.15, 1.2, wing, 0, 1.0, 2.5));
+  g.add(box(0.15, 1.15, 1.2, body, 0, 1.55, 2.6));
 
-  for (const sx of [-0.85, 0.85]) {                      // wheels
-    const wheel = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.35, 0.22, 10),
-      lambert(0x2b3238),
+  // Cockpit furniture.
+  if (form.canopy === 'hump') {
+    g.add(box(0.55, 0.32, 0.95, 0x3a4046, 0, 1.55, -0.85)); // twin-gun hump
+    g.add(box(0.7, 0.45, 0.9, detail, 0, 1.45, 0.35));
+  } else if (form.canopy === 'closed') {
+    g.add(box(0.95, 0.55, 1.7, 0x2b3238, 0, 1.6, 0.3));
+  } else if (form.canopy === 'bubble') {
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(0.55, 10, 8),
+      new THREE.MeshLambertMaterial({ color: 0x7fa8c9, transparent: true, opacity: 0.85 }),
     );
-    wheel.rotation.z = Math.PI / 2;
-    wheel.position.set(sx, -0.25, -0.9);
-    wheel.castShadow = true;
-    g.add(wheel);
-    g.add(box(0.1, 0.8, 0.1, body, sx, 0.25, -0.9));     // gear legs
+    dome.scale.set(0.85, 0.9, 1.5);
+    dome.position.set(0, 1.5, 0.3);
+    g.add(dome);
+  } else {
+    g.add(box(0.7, 0.45, 0.9, detail, 0, 1.45, 0.35)); // open cockpit rim
+  }
+  if (form.headrest) g.add(box(0.45, 0.5, 1.5, body, 0, 1.5, 1.1));
+  if (form.gunner) g.add(box(0.75, 0.4, 0.75, 0x2f3540, 0, 1.4, 1.6));
+
+  // Landing gear.
+  for (const sx of [-0.85, 0.85]) {
+    if (form.gear === 'spat') {
+      g.add(box(0.36, 0.95, 1.35, body, sx, -0.1, -0.9)); // teardrop spat
+      g.add(box(0.1, 0.6, 0.1, body, sx, 0.35, -0.9));
+    } else {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.22, 10), lambert(0x2b3238));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(sx, -0.25, -0.9);
+      wheel.castShadow = true;
+      g.add(wheel);
+      g.add(box(0.1, 0.8, 0.1, body, sx, 0.25, -0.9));
+    }
   }
 
-  const spinner = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 8), lambert(0x2b3238));
-  spinner.rotation.x = -Math.PI / 2;
-  spinner.position.set(0, 0.9, -2.85);
-  g.add(spinner);
-
-  const prop = box(0.18, 2.8, 0.1, 0x3c342a, 0, 0.9, -2.72);
+  const prop = box(0.18, 2.8, 0.1, 0x3c342a, 0, 0.9, noseZ - 0.02);
   g.add(prop);
 
   return { group: g, prop };
 }
 
-/** Enemy planes default to classic biplanes. */
-export const makeBiplane = (body: number, wing: number, detail: number): PlaneModel =>
-  makePlane('bi', body, wing, detail);
+/** Enemy archetype geometry: generic mono/bi/tri forms for the red air force. */
+export const ENEMY_FORMS: Record<PlaneShape, PlaneForm> = {
+  mono: { fuselage: 'box', nose: 'flat', wings: [{ y: 0.95, span: 10.5, chord: 2.2 }] },
+  bi: {
+    fuselage: 'box', nose: 'flat', struts: 'quad',
+    wings: [{ y: 1.95, span: 9, chord: 1.9 }, { y: 0.3, span: 8, chord: 1.7 }],
+  },
+  tri: {
+    fuselage: 'box', nose: 'flat', struts: 'quad', axleWing: true,
+    wings: [
+      { y: 2.55, span: 7.4, chord: 1.6 },
+      { y: 1.4, span: 8.4, chord: 1.8 },
+      { y: 0.25, span: 7, chord: 1.6 },
+    ],
+  },
+};
 
 /** Big slow zeppelin: ellipsoid hull, tail fins, gondola with a pusher prop. */
 export function makeBlimp(): PlaneModel {

@@ -39,6 +39,9 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
 | M | Mute sound |
 | F | Fullscreen |
 
+On phones and tablets a **virtual joystick** (left) and fire/bomb buttons (right)
+appear automatically — drag the stick to steer and climb/dive.
+
 **Mechanics carried over from the original:**
 
 - **Altitude matters** — your real cast shadow shows your height; you can only hit
