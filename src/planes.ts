@@ -117,6 +117,10 @@ export const PLANES: PlaneDef[] = [
     form: { fuselage: 'me262', nose: 'spinner', nation: 'de', wings: [] },
     steer: 66, climb: 15, dive: 26, bombs: 24, gunMs: 90,
     body: 0x5c6258, wing: 0x6b7265, detail: 0x3a424c, xp: 62000 },
+  { id: 'ho229', label: 'Horten Ho 229', year: 1945, desc: 'Flying wing — decades ahead of its time',
+    form: { fuselage: 'ho229', nose: 'spinner', nation: 'de', wings: [] },
+    steer: 62, climb: 16, dive: 25, bombs: 34, gunMs: 95,
+    body: 0x474c50, wing: 0x565c60, detail: 0x2f3438, xp: 70000 },
 ];
 
 export const PLANE_MAP: Record<string, PlaneDef> =

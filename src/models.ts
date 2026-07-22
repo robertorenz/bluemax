@@ -27,7 +27,7 @@ export type Nation = 'uk' | 'de' | 'fr' | 'us' | 'ussr';
 
 /** Geometry recipe for one aircraft — enough knobs to make each type recognizable. */
 export interface PlaneForm {
-  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby' | 'p38' | 'tbf' | 'me262';
+  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby' | 'p38' | 'tbf' | 'me262' | 'ho229';
   nose: 'flat' | 'spinner' | 'radial' | 'chin';
   wings: { y: number; span: number; chord: number; stagger?: number }[];
   struts?: 'none' | 'pair' | 'quad';
@@ -75,6 +75,7 @@ export function makePlane(form: PlaneForm, body: number, wing: number, detail: n
   if (form.fuselage === 'p38') return makeP38(body, wing, detail, form);
   if (form.fuselage === 'tbf') return makeTBF(body, wing, detail, form);
   if (form.fuselage === 'me262') return makeMe262(body, wing, detail, form);
+  if (form.fuselage === 'ho229') return makeHo229(body, wing, detail, form);
   const g = new THREE.Group();
 
   // Fuselage.
@@ -456,6 +457,74 @@ function makeMe262(body: number, wing: number, _detail: number, form: PlaneForm)
   g.add(box(4.4, 0.14, 1.25, wing, 0, 2.5, 4.35));
 
   // Jets have no propeller — hand back an invisible stub for the spinner hook.
+  const prop = box(0.01, 0.01, 0.01, body, 0, 0, 0);
+  prop.visible = false;
+
+  return { group: g, prop };
+}
+
+/**
+ * Horten Ho 229, drawn in detail: a pure flying wing — no fuselage, no tail.
+ * Thick blended center section with a low bubble canopy, twin jet intakes in
+ * the leading edge and glowing exhausts at the trailing edge, long swept and
+ * tapered outer wings with small wingtip drag rudders.
+ */
+function makeHo229(body: number, wing: number, _detail: number, form: PlaneForm): PlaneModel {
+  const g = new THREE.Group();
+
+  // Blended center body, thick at the root, with a wedge nose.
+  g.add(box(3.4, 0.95, 4.4, body, 0, 0.85, 0.4));
+  const noseWedge = box(2.4, 0.65, 1.8, body, 0, 0.78, -2.2);
+  noseWedge.rotation.x = -0.08;
+  g.add(noseWedge);
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.85, 1.4, 4), lambert(body));
+  nose.rotation.x = -Math.PI / 2;
+  nose.rotation.z = Math.PI / 4;
+  nose.scale.set(1.6, 1, 0.5);
+  nose.position.set(0, 0.8, -3.6);
+  g.add(nose);
+
+  // Low blended canopy.
+  const glass = new THREE.MeshLambertMaterial({ color: 0x7fa8c9, transparent: true, opacity: 0.85 });
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.48, 10, 8), glass);
+  canopy.scale.set(0.85, 0.7, 1.5);
+  canopy.position.set(0, 1.45, -1.3);
+  g.add(canopy);
+
+  // Twin jets buried in the wing roots: intakes forward, glowing exhausts aft.
+  for (const side of [-1, 1] as const) {
+    const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.14, 12), lambert(0x1a1d20));
+    intake.rotation.x = Math.PI / 2;
+    intake.position.set(side * 1.15, 0.95, -2.45);
+    g.add(intake);
+    g.add(box(0.75, 0.75, 3.6, body, side * 1.15, 0.95, -0.4)); // engine bulge
+    const exhaust = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.3, 0.14, 12),
+      new THREE.MeshBasicMaterial({ color: 0xe8863d }),
+    );
+    exhaust.rotation.x = Math.PI / 2;
+    exhaust.position.set(side * 1.15, 0.95, 2.35);
+    g.add(exhaust);
+  }
+
+  // Long swept, tapered outer wings with tip drag rudders.
+  for (const side of [-1, 1] as const) {
+    const inner = box(3.6, 0.5, 3.0, wing, side * 3.2, 0.85, 0.6);
+    inner.rotation.y = side * 0.42;
+    g.add(inner);
+    const outer = box(3.4, 0.32, 1.9, wing, side * 6.1, 0.85, 1.9);
+    outer.rotation.y = side * 0.42;
+    g.add(outer);
+    const tip = box(1.2, 0.22, 1.1, wing, side * 8.1, 0.85, 2.9);
+    tip.rotation.y = side * 0.42;
+    g.add(tip);
+    const rudder = box(0.1, 0.55, 1.0, body, side * 8.4, 1.1, 3.0);
+    rudder.rotation.y = side * 0.42;
+    g.add(rudder);
+    if (form.nation) addMarking(g, form.nation, side * 4.4, 1.12, 1.1);
+  }
+
+  // No propeller on a flying wing jet.
   const prop = box(0.01, 0.01, 0.01, body, 0, 0, 0);
   prop.visible = false;
 

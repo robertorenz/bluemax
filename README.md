@@ -15,9 +15,9 @@ with the Fokker Eindecker, Sopwith Camel, and Fokker Dr.I, and work up through t
 Albatros D.III, SPAD S.XIII, Sopwith Triplane, Bristol F.2, Fokker D.VII,
 P-26 Peashooter, Gloster Gladiator, Polikarpov I-16, Spitfire Mk I, Bf 109 E,
 P-40 Flying Tiger, P-38 Lightning (twin booms, 40 bombs), P-51 Mustang, the
-TBF Avenger (46-bomb Navy torpedo bomber), and finally the Me 262 Schwalbe at
-62,000 XP — the first jet, with glowing turbojet exhausts and no propeller at
-all. Later aircraft generally steer faster, dive harder, and shoot quicker.
+TBF Avenger (46-bomb Navy torpedo bomber), the Me 262 Schwalbe (the first jet),
+and finally the Horten Ho 229 flying wing at 70,000 XP. Later aircraft generally
+steer faster, dive harder, and shoot quicker.
 
 **High scores:** arcade-style 3-letter initials feed a **shared global leaderboard**
 (Supabase, read/insert-only via row-level security), with a local top-10 fallback
