@@ -14,8 +14,9 @@ unlocks new aircraft. The hangar holds 15 classics spanning 1915–1944 — you 
 with the Fokker Eindecker, Sopwith Camel, and Fokker Dr.I, and work up through the
 Albatros D.III, SPAD S.XIII, Sopwith Triplane, Bristol F.2, Fokker D.VII,
 P-26 Peashooter, Gloster Gladiator, Polikarpov I-16, Spitfire Mk I, Bf 109 E,
-P-40 Flying Tiger, and finally the P-51 Mustang at 50,000 XP. Later aircraft
-steer faster, dive harder, and shoot quicker.
+P-40 Flying Tiger, P-38 Lightning (twin booms, 40 bombs), and finally the
+P-51 Mustang at 50,000 XP. Later aircraft steer faster, dive harder, and
+shoot quicker.
 
 **High scores:** arcade-style 3-letter initials feed a **shared global leaderboard**
 (Supabase, read/insert-only via row-level security), with a local top-10 fallback

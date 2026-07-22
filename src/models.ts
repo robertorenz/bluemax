@@ -17,6 +17,7 @@ function box(
 export interface PlaneModel {
   group: THREE.Group;
   prop: THREE.Mesh;
+  prop2?: THREE.Mesh; // twin-engine types
 }
 
 /** Enemy archetype ids kept for the red air force. */
@@ -26,7 +27,7 @@ export type Nation = 'uk' | 'de' | 'fr' | 'us' | 'ussr';
 
 /** Geometry recipe for one aircraft — enough knobs to make each type recognizable. */
 export interface PlaneForm {
-  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby';
+  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby' | 'p38';
   nose: 'flat' | 'spinner' | 'radial' | 'chin';
   wings: { y: number; span: number; chord: number; stagger?: number }[];
   struts?: 'none' | 'pair' | 'quad';
@@ -71,6 +72,7 @@ function addMarking(g: THREE.Group, nation: Nation, x: number, ySurf: number, z:
  * toward -z. Origin sits at the fuselage centerline so altitude == position.y.
  */
 export function makePlane(form: PlaneForm, body: number, wing: number, detail: number): PlaneModel {
+  if (form.fuselage === 'p38') return makeP38(body, wing, detail, form);
   const g = new THREE.Group();
 
   // Fuselage.
@@ -222,6 +224,87 @@ export function makePlane(form: PlaneForm, body: number, wing: number, detail: n
   g.add(prop);
 
   return { group: g, prop };
+}
+
+/**
+ * P-38 Lightning, drawn in detail: central gondola with the concentrated nose
+ * armament and bubble canopy, twin engine booms with counter-rotating props,
+ * turbo-superchargers and radiator bulges, and the twin-fin tail bridged by
+ * the horizontal stabilizer.
+ */
+function makeP38(body: number, wing: number, detail: number, form: PlaneForm): PlaneModel {
+  const g = new THREE.Group();
+  const boomX = 3.1;
+
+  // Central gondola.
+  g.add(box(1.15, 1.1, 4.6, body, 0, 1.0, -0.5));
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), lambert(body));
+  nose.position.set(0, 1.0, -2.75);
+  nose.scale.set(1, 0.95, 1.7);
+  nose.castShadow = true;
+  g.add(nose);
+  // Nose armament: four machine guns around a 20mm cannon.
+  for (const [gx, gy] of [[-0.27, 1.2], [0.27, 1.2], [-0.27, 0.92], [0.27, 0.92]]) {
+    g.add(box(0.09, 0.09, 0.95, 0x22262a, gx, gy, -3.5));
+  }
+  g.add(box(0.14, 0.14, 1.2, 0x1a1d20, 0, 1.06, -3.6));
+  // Bubble canopy.
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 10, 8),
+    new THREE.MeshLambertMaterial({ color: 0x7fa8c9, transparent: true, opacity: 0.85 }),
+  );
+  dome.scale.set(0.9, 0.85, 1.5);
+  dome.position.set(0, 1.72, 0.1);
+  g.add(dome);
+
+  // Center wing carrying gondola and booms.
+  g.add(box(boomX * 2 + 2.4, 0.26, 2.7, wing, 0, 0.55, -0.4));
+  // Outer panels with dihedral, tips, and insignia.
+  const dih = 0.08;
+  const outerSpan = 3.4;
+  for (const side of [-1, 1] as const) {
+    const px = side * (boomX + 1.2 + outerSpan / 2 - 0.05);
+    const py = 0.55 + (Math.sin(dih) * outerSpan) / 2;
+    const panel = box(outerSpan, 0.22, 2.2, wing, px, py, -0.35);
+    panel.rotation.z = side * dih;
+    g.add(panel);
+    const tip = box(
+      1.1, 0.18, 1.4, wing,
+      side * (boomX + 1.2 + outerSpan + 0.35), 0.55 + Math.sin(dih) * outerSpan, -0.3,
+    );
+    tip.rotation.z = side * dih;
+    g.add(tip);
+    if (form.nation) addMarking(g, form.nation, px, py + 0.15, -0.35);
+  }
+
+  // Twin booms: engine cowls, spinners, props, superchargers, radiators, fins.
+  let prop!: THREE.Mesh;
+  let prop2: THREE.Mesh | undefined;
+  for (const side of [-1, 1] as const) {
+    const bx = side * boomX;
+    g.add(box(0.95, 1.0, 8.2, body, bx, 0.9, 0.6));
+    const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.62, 1.7, 10), lambert(body));
+    cowl.rotation.x = Math.PI / 2;
+    cowl.position.set(bx, 0.95, -3.4);
+    cowl.castShadow = true;
+    g.add(cowl);
+    const spin = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.72, 10), lambert(detail));
+    spin.rotation.x = -Math.PI / 2;
+    spin.position.set(bx, 0.95, -4.5);
+    g.add(spin);
+    const blade = box(0.16, 2.7, 0.1, 0x3c342a, bx, 0.95, -4.32);
+    g.add(blade);
+    if (side < 0) prop = blade;
+    else prop2 = blade;
+    g.add(box(0.5, 0.3, 1.5, 0x3a4046, bx, 1.52, 1.5));   // turbo-supercharger
+    g.add(box(1.28, 0.5, 1.7, 0x3a4046, bx, 0.62, 1.2));  // radiator bulges
+    g.add(box(0.14, 1.9, 1.35, body, bx, 1.85, 4.35));    // vertical fin
+    g.add(box(0.14, 0.85, 1.9, body, bx, 1.5, 4.3));      // fin fillet
+  }
+  // Stabilizer bridging the booms.
+  g.add(box(boomX * 2 + 1.3, 0.15, 1.15, wing, 0, 1.45, 4.35));
+
+  return { group: g, prop, prop2 };
 }
 
 /** Enemy archetype geometry: generic mono/bi/tri forms for the red air force. */

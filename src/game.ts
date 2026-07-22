@@ -161,6 +161,7 @@ export class Game {
 
   private player!: THREE.Group;
   private playerProp!: THREE.Mesh;
+  private playerProp2?: THREE.Mesh;
   private chunks: THREE.Group[] = [];
   private clouds: THREE.Group[] = [];
   private cloudMats: THREE.MeshLambertMaterial[] = [];
@@ -398,11 +399,12 @@ export class Game {
     this.maxBombs = def.bombs;
     const pos = this.player?.position.clone();
     if (this.player) this.scene.remove(this.player);
-    const { group, prop } = makePlane(def.form, def.body, def.wing, def.detail);
+    const { group, prop, prop2 } = makePlane(def.form, def.body, def.wing, def.detail);
     group.position.copy(pos ?? new THREE.Vector3(0, this.alt, PLAYER_Z));
     group.scale.setScalar(1.25); // offset the extra camera distance
     this.player = group;
     this.playerProp = prop;
+    this.playerProp2 = prop2;
     this.scene.add(group);
   }
 
@@ -483,6 +485,7 @@ export class Game {
   update(dt: number, now: number): void {
     this.now = now;
     this.playerProp.rotation.z += (30 + 20 * this.speedFactor) * dt;
+    if (this.playerProp2) this.playerProp2.rotation.z -= (30 + 20 * this.speedFactor) * dt; // counter-rotating
 
     this.speedFactor = THREE.MathUtils.damp(
       this.speedFactor,
