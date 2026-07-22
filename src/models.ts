@@ -615,6 +615,20 @@ export function makeCanyon(params: RiverParams): THREE.Group {
   return g;
 }
 
+/** Smooth rolling hill: a wide grassy dome (stretched a little along z). */
+export function makeRollingHill(r: number, h: number, rz: number): THREE.Group {
+  const g = new THREE.Group();
+  const greens = [0x5f8046, 0x6a8c50, 0x557a40];
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    lambert(greens[Math.floor(Math.random() * greens.length)]),
+  );
+  dome.scale.set(r, h, rz);
+  dome.castShadow = true;
+  g.add(dome);
+  return g;
+}
+
 /** Grassy hill with a rocky crown — a solid obstacle you must climb over. */
 export function makeHill(r: number, h: number): THREE.Group {
   const g = new THREE.Group();

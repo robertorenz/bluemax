@@ -5,7 +5,7 @@ import {
   makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
-  makeCottage, makeChurch, makeCastle, makeHill, makeWindmill, makeCanyon,
+  makeCottage, makeChurch, makeCastle, makeHill, makeRollingHill, makeWindmill, makeCanyon,
   canyonTaper, CANYON_WIDTH, CANYON_WALL_H,
   riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneShape,
@@ -67,6 +67,8 @@ interface GroundObj {
   host?: GroundObj;
   hillR?: number;
   hillH?: number;
+  hillRz?: number;
+  hillShape?: 'cone' | 'dome';
   damaged?: boolean;
   dead?: boolean;
   nextSmokeAt?: number;
@@ -656,11 +658,17 @@ export class Game {
         // The deck is solid, but a daring pilot can fly under it.
         hit = dz < 3.5 && dx < 15.5 && this.alt > 2.6 && this.alt < 5.4;
       } else if (o.kind === 'hill') {
-        // Conical terrain: the closer to the summit, the higher you must be.
-        const d = Math.hypot(pos.x - p.x, pos.z - p.z);
+        // Terrain: height falls off from the summit; domes are round, peaks conical.
         const r = o.hillR ?? 10;
         const h = o.hillH ?? 10;
-        hit = d < r && this.alt < h * (1 - d / r) + 0.7;
+        if (o.hillShape === 'dome') {
+          const rz = o.hillRz ?? r;
+          const n = Math.hypot((pos.x - p.x) / r, (pos.z - p.z) / rz);
+          hit = n < 1 && this.alt < h * Math.sqrt(1 - n * n) + 0.7;
+        } else {
+          const d = Math.hypot(pos.x - p.x, pos.z - p.z);
+          hit = d < r && this.alt < h * (1 - d / r) + 0.7;
+        }
         safeAlt = Math.min(MAX_ALT - 4, h + 5);
       } else if (o.kind === 'canyon' && o.river) {
         // Inside the gorge you can fly below the rims; the walls are solid.
@@ -886,21 +894,49 @@ export class Game {
     return true;
   }
 
-  /** A short ridge of 1-3 hills — solid terrain you must out-climb. */
+  /** Terrain ridges: mostly chains of smooth rolling hills, sometimes steep peaks. */
   private spawnHills(): boolean {
     const cx = (Math.random() - 0.5) * 90;
-    const count = 1 + Math.floor(Math.random() * 3);
     let placed = 0;
-    for (let i = 0; i < count; i++) {
-      const r = 9 + Math.random() * 8;
-      const h = 9 + Math.random() * 11;
-      const hx = cx + i * (r * 1.5) * (Math.random() < 0.5 ? -1 : 1);
-      if (this.blocksRunwayLane('hill', hx, r - 10)) continue;
-      const hill = makeHill(r, h);
-      hill.position.set(hx, 0, -505 - Math.random() * 40);
-      this.scene.add(hill);
-      this.groundObjs.push({ group: hill, kind: 'hill', hp: 99, fireAt: Infinity, hillR: r, hillH: h });
-      placed++;
+    if (Math.random() < 0.7) {
+      // Rolling country: 2-4 wide overlapping grassy domes.
+      let x = cx;
+      const count = 2 + Math.floor(Math.random() * 3);
+      let z = -505 - Math.random() * 30;
+      for (let i = 0; i < count; i++) {
+        const r = 13 + Math.random() * 9;
+        const h = 5 + Math.random() * 6;
+        const rz = r * (0.8 + Math.random() * 0.5);
+        if (!this.blocksRunwayLane('hill', x, r - 10)) {
+          const hill = makeRollingHill(r, h, rz);
+          hill.position.set(x, 0, z);
+          this.scene.add(hill);
+          this.groundObjs.push({
+            group: hill, kind: 'hill', hp: 99, fireAt: Infinity,
+            hillR: r, hillH: h, hillRz: rz, hillShape: 'dome',
+          });
+          placed++;
+        }
+        x += r * (0.9 + Math.random() * 0.6) * (Math.random() < 0.3 ? -1 : 1);
+        z -= Math.random() * 24;
+      }
+    } else {
+      // Steep peaks with rocky crowns.
+      const count = 1 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < count; i++) {
+        const r = 9 + Math.random() * 8;
+        const h = 9 + Math.random() * 11;
+        const hx = cx + i * (r * 1.5) * (Math.random() < 0.5 ? -1 : 1);
+        if (this.blocksRunwayLane('hill', hx, r - 10)) continue;
+        const hill = makeHill(r, h);
+        hill.position.set(hx, 0, -505 - Math.random() * 40);
+        this.scene.add(hill);
+        this.groundObjs.push({
+          group: hill, kind: 'hill', hp: 99, fireAt: Infinity,
+          hillR: r, hillH: h, hillShape: 'cone',
+        });
+        placed++;
+      }
     }
     return placed > 0;
   }
