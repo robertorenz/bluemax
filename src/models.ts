@@ -241,6 +241,112 @@ export const ENEMY_FORMS: Record<PlaneShape, PlaneForm> = {
   },
 };
 
+export const CANYON_WIDTH = 30;
+export const CANYON_WALL_H = 16;
+
+/** Height taper at the canyon ends so you can fly in and out over them. */
+export function canyonTaper(relZ: number): number {
+  return Math.max(0, Math.min((relZ + RIVER_LEN / 2) / 150, (RIVER_LEN / 2 - relZ) / 150, 1));
+}
+
+/**
+ * Canyon: rock walls rising to elevated grassy mesas on both sides of a
+ * gorge, with a rock floor and a stream. Wall height tapers to zero at the
+ * ends so the gorge can be entered and exited along its length.
+ */
+export function makeCanyon(params: RiverParams): THREE.Group {
+  const g = new THREE.Group();
+  g.add(makeLaneStrip(params, CANYON_WIDTH, 0x6e6252, 0.02)); // rock floor
+  g.add(makeLaneStrip(params, 4, 0x3d6b96, 0.07));            // stream
+
+  const rock = new THREE.Color(0x7a6a52);
+  const rockDark = new THREE.Color(0x60533f);
+  const grass = new THREE.Color(0x6a8f4a);
+  // Lateral profile per side: [x offset, height factor, color].
+  const prof: [number, number, THREE.Color][] = [
+    [CANYON_WIDTH / 2, 0, rockDark],
+    [CANYON_WIDTH / 2 + 6, 1, rock],
+    [CANYON_WIDTH / 2 + 44, 1, grass],
+    [CANYON_WIDTH / 2 + 54, 0, grass],
+  ];
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const push = (pnt: number[], c: THREE.Color): void => {
+    positions.push(pnt[0], pnt[1], pnt[2]);
+    colors.push(c.r, c.g, c.b);
+  };
+  const step = 20;
+  for (let z = -RIVER_LEN / 2; z < RIVER_LEN / 2; z += step) {
+    const z1 = z + step;
+    const c0 = riverXAt(params, z);
+    const c1 = riverXAt(params, z1);
+    const h0 = CANYON_WALL_H * canyonTaper(z);
+    const h1 = CANYON_WALL_H * canyonTaper(z1);
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < prof.length - 1; i++) {
+        const [xa, ya, ca] = prof[i];
+        const [xb, yb, cb] = prof[i + 1];
+        const A = [c0 + side * xa, ya * h0, z];
+        const B = [c1 + side * xa, ya * h1, z1];
+        const C = [c1 + side * xb, yb * h1, z1];
+        const D = [c0 + side * xb, yb * h0, z];
+        push(A, ca); push(B, ca); push(C, cb);
+        push(A, ca); push(C, cb); push(D, cb);
+      }
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.computeVertexNormals();
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
+  );
+  mesh.receiveShadow = true;
+  g.add(mesh);
+  return g;
+}
+
+/** Grassy hill with a rocky crown — a solid obstacle you must climb over. */
+export function makeHill(r: number, h: number): THREE.Group {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.ConeGeometry(r, h, 9), lambert(0x5c7d44));
+  base.position.y = h / 2;
+  base.castShadow = true;
+  g.add(base);
+  const crown = new THREE.Mesh(new THREE.ConeGeometry(r * 0.35, h * 0.32, 8), lambert(0x8a8069));
+  crown.position.y = h * 0.86;
+  g.add(crown);
+  return g;
+}
+
+/** Tall windmill; the sail cross (returned as barrel) spins until knocked out. */
+export function makeWindmill(): AAGunModel {
+  const g = new THREE.Group();
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.2, 9.5, 9), lambert(0xb8a88a));
+  tower.position.y = 4.75;
+  tower.castShadow = true;
+  g.add(tower);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.8, 9), lambert(0x6e5340));
+  cap.position.y = 10.4;
+  cap.castShadow = true;
+  g.add(cap);
+  g.add(box(1.1, 1.5, 0.15, 0x4a3c30, 0, 0.8, -2.1)); // door
+
+  const sails = new THREE.Group();
+  sails.position.set(0, 9.6, -2.2);
+  for (let i = 0; i < 4; i++) {
+    const holder = new THREE.Group();
+    const blade = box(0.6, 4.4, 0.1, 0xd8d2c2, 0, 2.5, 0);
+    holder.add(blade);
+    holder.rotation.z = (i * Math.PI) / 2;
+    sails.add(holder);
+  }
+  g.add(sails);
+  return { group: g, barrel: sails };
+}
+
 /** Jagged lightning bolt from cloud height to the ground. */
 export function makeLightning(): THREE.Group {
   const g = new THREE.Group();
@@ -382,6 +488,7 @@ export interface RiverParams {
   phase2: number;
   sideIn: -1 | 1;  // side the far end swings off to
   sideOut: -1 | 1; // side the near end swings off to
+  edgePush?: number; // override the end swing distance (0 = ends stay in line)
 }
 
 export const RIVER_LEN = 2000;
@@ -404,9 +511,10 @@ export function riverXAt(p: RiverParams, relZ: number): number {
   const wander =
     p.amp * Math.sin((relZ * Math.PI * 2) / p.waveLen + p.phase) +
     p.amp2 * Math.sin((relZ * Math.PI * 2) / p.waveLen2 + p.phase2);
+  const push = p.edgePush ?? EDGE_PUSH;
   const tIn = smooth01((-relZ - (RIVER_LEN / 2 - EDGE_RAMP)) / EDGE_RAMP);
   const tOut = smooth01((relZ - (RIVER_LEN / 2 - EDGE_RAMP)) / EDGE_RAMP);
-  return wander + p.sideIn * EDGE_PUSH * tIn + p.sideOut * EDGE_PUSH * tOut;
+  return wander + p.sideIn * push * tIn + p.sideOut * push * tOut;
 }
 
 /**

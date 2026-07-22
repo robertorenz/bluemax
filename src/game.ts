@@ -5,7 +5,8 @@ import {
   makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
-  makeCottage, makeChurch, makeCastle,
+  makeCottage, makeChurch, makeCastle, makeHill, makeWindmill, makeCanyon,
+  canyonTaper, CANYON_WIDTH, CANYON_WALL_H,
   riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneShape,
 } from './models';
@@ -48,10 +49,11 @@ interface AirEnemy {
 
 type GroundKind =
   | 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot'
-  | 'river' | 'bridge' | 'ship' | 'road' | 'car' | 'castle';
+  | 'river' | 'bridge' | 'ship' | 'road' | 'car' | 'castle'
+  | 'hill' | 'windmill' | 'canyon';
 
 /** Lane kinds share the long wandering-strip behavior. */
-const isLane = (k: GroundKind): boolean => k === 'river' || k === 'road';
+const isLane = (k: GroundKind): boolean => k === 'river' || k === 'road' || k === 'canyon';
 
 interface GroundObj {
   group: THREE.Group;
@@ -63,6 +65,8 @@ interface GroundObj {
   vz?: number;
   river?: RiverParams;
   host?: GroundObj;
+  hillR?: number;
+  hillH?: number;
   damaged?: boolean;
   dead?: boolean;
   nextSmokeAt?: number;
@@ -78,6 +82,7 @@ const STRUCT_HIT: Partial<Record<GroundKind, { r: number; h: number }>> = {
   ship:     { r: 4, h: 4 },
   car:      { r: 2.2, h: 2.4 },
   castle:   { r: 12, h: 11 },
+  windmill: { r: 2.6, h: 11.5 },
 };
 
 const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: number }> = {
@@ -90,6 +95,9 @@ const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: numb
   ship:     { hp: 1, score: 100, radius: 14 },
   car:      { hp: 1, score: 60, radius: 12 },
   castle:   { hp: 4, score: 400, radius: 22 },
+  windmill: { hp: 1, score: 100, radius: 14 },
+  hill:     { hp: 99, score: 0, radius: 0 },
+  canyon:   { hp: 99, score: 0, radius: 0 },
   river:    { hp: 99, score: 0, radius: 0 },
   road:     { hp: 99, score: 0, radius: 0 },
   runway:   { hp: 99, score: 0, radius: 0 },
@@ -194,6 +202,8 @@ export class Game {
   private nextRoadAt = 0;
   private nextVillageAt = 0;
   private nextCastleAt = 0;
+  private nextHillsAt = 0;
+  private nextCanyonAt = 0;
   private startedAt = 0;
 
   constructor(container: HTMLElement, private hud: Hud) {
@@ -444,6 +454,8 @@ export class Game {
     this.nextRoadAt = this.now + 24000;
     this.nextVillageAt = this.now + 30000;
     this.nextCastleAt = this.now + 80000;
+    this.nextHillsAt = this.now + 14000;
+    this.nextCanyonAt = this.now + 100000;
     this.startedAt = this.now;
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
@@ -628,7 +640,7 @@ export class Game {
     }
   }
 
-  /** Crash when the plane occupies the same space as a solid structure. */
+  /** Crash when the plane occupies the same space as solid structure or terrain. */
   private checkStructureCollision(): void {
     const p = this.player.position;
     for (const o of this.groundObjs) {
@@ -636,9 +648,26 @@ export class Game {
       const dx = Math.abs(pos.x - p.x);
       const dz = Math.abs(pos.z - p.z);
       let hit = false;
+      let safeAlt = 14;
       if (o.kind === 'bridge' && !o.dead) {
         // The deck is solid, but a daring pilot can fly under it.
         hit = dz < 3.5 && dx < 15.5 && this.alt > 2.6 && this.alt < 5.4;
+      } else if (o.kind === 'hill') {
+        // Conical terrain: the closer to the summit, the higher you must be.
+        const d = Math.hypot(pos.x - p.x, pos.z - p.z);
+        const r = o.hillR ?? 10;
+        const h = o.hillH ?? 10;
+        hit = d < r && this.alt < h * (1 - d / r) + 0.7;
+        safeAlt = Math.min(MAX_ALT - 4, h + 5);
+      } else if (o.kind === 'canyon' && o.river) {
+        // Inside the gorge you can fly below the rims; the walls are solid.
+        const rel = p.z - pos.z;
+        if (Math.abs(rel) < RIVER_LEN / 2) {
+          const wallH = CANYON_WALL_H * canyonTaper(rel);
+          const dxc = p.x - (pos.x + riverXAt(o.river, rel));
+          hit = Math.abs(dxc) > CANYON_WIDTH / 2 - 2 && this.alt < wallH + 0.7;
+          safeAlt = wallH + 6;
+        }
       } else {
         const dims = STRUCT_HIT[o.kind];
         if (!dims) continue;
@@ -647,7 +676,7 @@ export class Game {
       }
       if (hit) {
         this.playerHit(true); // crash explosion + lost life
-        this.alt = 14;
+        this.alt = safeAlt;
         return;
       }
     }
@@ -684,10 +713,11 @@ export class Game {
       this.nextGroundAt = this.now + 1700 + Math.random() * 1800;
       const r = Math.random();
       const kind: GroundKind =
-        r < 0.3 ? 'building' :
-        r < 0.52 ? 'aagun' :
-        r < 0.7 ? 'tank' :
-        r < 0.85 ? 'factory' : 'depot';
+        r < 0.26 ? 'building' :
+        r < 0.46 ? 'aagun' :
+        r < 0.62 ? 'tank' :
+        r < 0.75 ? 'factory' :
+        r < 0.87 ? 'depot' : 'windmill';
       this.spawnGroundObj(kind);
     }
     if (this.now > this.nextRunwayAt) {
@@ -715,6 +745,16 @@ export class Game {
       this.nextCastleAt = this.spawnCastle()
         ? this.now + 140000 + Math.random() * 80000
         : this.now + 10000;
+    }
+    if (this.now > this.nextHillsAt) {
+      this.nextHillsAt = this.spawnHills()
+        ? this.now + 24000 + Math.random() * 18000
+        : this.now + 7000;
+    }
+    if (this.now > this.nextCanyonAt) {
+      this.nextCanyonAt = this.spawnCanyon()
+        ? this.now + 160000 + Math.random() * 100000
+        : this.now + 12000;
     }
   }
 
@@ -777,6 +817,11 @@ export class Game {
     else if (kind === 'runway') group = makeRunway();
     else if (kind === 'factory') group = makeFactory();
     else if (kind === 'depot') group = makeDepot();
+    else if (kind === 'windmill') {
+      const model = makeWindmill();
+      group = model.group;
+      barrel = model.barrel;
+    }
     else if (kind === 'tank') {
       const model = makeTank();
       group = model.group;
@@ -837,6 +882,47 @@ export class Game {
     return true;
   }
 
+  /** A short ridge of 1-3 hills — solid terrain you must out-climb. */
+  private spawnHills(): boolean {
+    const cx = (Math.random() - 0.5) * 90;
+    const count = 1 + Math.floor(Math.random() * 3);
+    let placed = 0;
+    for (let i = 0; i < count; i++) {
+      const r = 9 + Math.random() * 8;
+      const h = 9 + Math.random() * 11;
+      const hx = cx + i * (r * 1.5) * (Math.random() < 0.5 ? -1 : 1);
+      if (this.blocksRunwayLane('hill', hx, r - 10)) continue;
+      const hill = makeHill(r, h);
+      hill.position.set(hx, 0, -505 - Math.random() * 40);
+      this.scene.add(hill);
+      this.groundObjs.push({ group: hill, kind: 'hill', hp: 99, fireAt: Infinity, hillR: r, hillH: h });
+      placed++;
+    }
+    return placed > 0;
+  }
+
+  /** A long canyon run: dive below the rim, follow the gorge, climb out. */
+  private spawnCanyon(): boolean {
+    if (this.laneBusy()) return false;
+    const params: RiverParams = {
+      amp: 18 + Math.random() * 20,
+      waveLen: 700 + Math.random() * 300,
+      phase: Math.random() * Math.PI * 2,
+      amp2: 4 + Math.random() * 4,
+      waveLen2: 160 + Math.random() * 80,
+      phase2: Math.random() * Math.PI * 2,
+      sideIn: 1,
+      sideOut: 1,
+      edgePush: 0, // canyon ends stay in line; you fly in over the tapered walls
+    };
+    const baseX = (Math.random() - 0.5) * 20;
+    const group = makeCanyon(params);
+    group.position.set(baseX, 0, -500 - RIVER_LEN / 2);
+    this.scene.add(group);
+    this.groundObjs.push({ group, kind: 'canyon', hp: 99, fireAt: Infinity, river: params });
+    return true;
+  }
+
   /** True when placing here would collide with a runway or a lane's course. */
   private blocksRunwayLane(kind: GroundKind, x: number, extra = 0): boolean {
     for (const o of this.groundObjs) {
@@ -846,10 +932,11 @@ export class Game {
         // the course at exactly that section (plus the object's z extent).
         const rel = -500 - o.group.position.z;
         const halfSpan = kind === 'runway' ? 45 : 20;
+        const laneMargin = o.kind === 'canyon' ? 56 : 24;
         for (let dz = -halfSpan; dz <= halfSpan; dz += 15) {
           const r = rel + dz;
           if (Math.abs(r) > RIVER_LEN / 2) continue;
-          if (Math.abs(o.group.position.x + riverXAt(o.river, r) - x) < 24 + extra) return true;
+          if (Math.abs(o.group.position.x + riverXAt(o.river, r) - x) < laneMargin + extra) return true;
         }
       } else if ((kind === 'runway' || o.kind === 'runway') && o.kind !== 'river') {
         if (o.group.position.z < -380 && Math.abs(o.group.position.x - x) < 18 + extra) return true;
@@ -1000,6 +1087,11 @@ export class Game {
       const o = this.groundObjs[i];
       const pos = o.group.position;
       pos.z += this.scroll * dt;
+
+      // Windmill sails turn until the mill is knocked out.
+      if (o.kind === 'windmill' && o.barrel && !o.damaged) {
+        o.barrel.rotation.z += 1.1 * dt;
+      }
 
       // Tanks patrol laterally until knocked out.
       if (o.kind === 'tank' && o.vx && !o.damaged) {

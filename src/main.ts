@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Game, type Hud } from './game';
 import {
   makePlane, ENEMY_FORMS, makeBlimp, makeBridge, makeFactory, makeTank,
-  makeShip, makeDepot, makeAAGun, makeCar, makeBuilding, makeCastle,
+  makeShip, makeDepot, makeAAGun, makeCar, makeBuilding, makeCastle, makeWindmill,
 } from './models';
 import { PLANES, PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
 import {
@@ -91,6 +91,7 @@ const SCORE_TABLE: { label: string; pts: number; build: () => THREE.Object3D }[]
   { label: 'Enemy Monoplane', pts: 120, build: () => makePlane(ENEMY_FORMS.mono, 0x5a5f66, 0x7d838c, 0xeed8d4).group },
   { label: 'Enemy Biplane', pts: 100, build: () => makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4).group },
   { label: 'Tank', pts: 100, build: () => makeTank().group },
+  { label: 'Windmill', pts: 100, build: () => makeWindmill().group },
   { label: 'River Barge', pts: 100, build: makeShip },
   { label: 'Fuel Depot', pts: 100, build: makeDepot },
   { label: 'AA Gun', pts: 75, build: () => makeAAGun().group },
