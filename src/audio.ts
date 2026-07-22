@@ -4,22 +4,23 @@
  * so every method is a safe no-op until init() has run.
  */
 // ---------------------------------------------------------------- music score
-// An 8-bar heroic flying theme, composed as data: C - G - Am - F twice around,
-// with an arcing melody. MIDI note numbers; null = rest. 8 eighth-notes per bar.
-const MUSIC_ROOTS = [48, 43, 45, 41, 48, 43, 41, 43]; // C3 G2 A2 F2 ...
+// A joyous 8-bar flying theme: C - F - C - G / Am - F - G - C, with a skipping
+// melody, arpeggio sparkle, string-like pads, and bell doublings.
+// MIDI note numbers; null = rest. 8 eighth-notes per bar.
+const MUSIC_ROOTS = [48, 41, 48, 43, 45, 41, 43, 48]; // C3 F2 C3 G2 A2 F2 G2 C3
 const MUSIC_TRIADS = [
-  [60, 64, 67], [59, 62, 67], [57, 60, 64], [57, 60, 65],
-  [60, 64, 67], [59, 62, 67], [57, 60, 65], [59, 62, 67],
+  [60, 64, 67], [57, 60, 65], [60, 64, 67], [59, 62, 67],
+  [57, 60, 64], [57, 60, 65], [59, 62, 67], [60, 64, 67],
 ];
 const MUSIC_MELODY: (number | null)[][] = [
-  [72, null, 67, 72, 74, null, 76, null],
-  [74, 72, 71, 67, 71, null, 67, null],
-  [69, null, 72, 69, 76, null, 72, null],
-  [74, 71, 69, 67, 65, 67, 69, 71],
-  [72, null, 67, 72, 74, null, 76, 79],
-  [79, 76, 74, 71, 74, null, 71, null],
-  [69, 72, 76, 72, 77, 76, 74, 72],
-  [74, null, 71, null, 72, null, null, null],
+  [72, 76, 79, null, 76, 79, 81, null],
+  [81, 79, 77, 76, 77, null, 74, null],
+  [72, 76, 79, 76, 84, null, 79, null],
+  [81, 79, 74, 71, 74, null, 79, null],
+  [76, 72, 69, 72, 76, null, 81, null],
+  [81, 84, 81, 77, 81, null, 77, null],
+  [79, 81, 83, 84, 83, 81, 79, 74],
+  [76, null, 74, null, 72, null, null, null],
 ];
 const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -103,21 +104,35 @@ export class AudioFx {
   private scheduleMusic(): void {
     const ctx = this.ctx;
     if (!ctx) return;
-    const beat = 60 / 116; // 116 BPM
+    const beat = 60 / 126; // 126 BPM — brighter step
     const eighth = beat / 2;
     while (this.nextNoteTime < ctx.currentTime + 0.6) {
       const bar = Math.floor(this.songPos / 8) % 8;
       const step = this.songPos % 8;
       const t = this.nextNoteTime;
-      // Driving bass on the quarters.
-      if (step % 2 === 0) this.tone(MUSIC_ROOTS[bar], t, beat * 0.85, 'sawtooth', 0.075, 320);
-      // Warm pad chord at each bar line.
-      if (step === 0) {
-        for (const n of MUSIC_TRIADS[bar]) this.tone(n, t, beat * 3.8, 'triangle', 0.028, 900);
+      const triad = MUSIC_TRIADS[bar];
+
+      // Bouncing bass: root on the strong beats, the fifth answering.
+      if (step % 2 === 0) {
+        const note = step % 4 === 0 ? MUSIC_ROOTS[bar] : MUSIC_ROOTS[bar] + 7;
+        this.tone(note, t, beat * 0.8, 'sawtooth', 0.07, 340);
       }
-      // Soaring lead.
+      // String-like pad swelling in at each bar line.
+      if (step === 0) {
+        for (const n of triad) this.tone(n, t, beat * 3.9, 'sawtooth', 0.016, 750, 4, 0.3);
+      }
+      // Harp-like arpeggio sparkle on the off-eighths.
+      if (step % 2 === 1) {
+        const arpNote = triad[((this.songPos >> 1) % 3)] + 12;
+        this.tone(arpNote, t, eighth * 0.85, 'triangle', 0.024, 2600);
+      }
+      // Skipping lead.
       const m = MUSIC_MELODY[bar][step];
-      if (m !== null) this.tone(m, t, eighth * 0.92, 'square', 0.042, 1900, 6);
+      if (m !== null) {
+        this.tone(m, t, eighth * 0.92, 'square', 0.038, 2200, 6);
+        // Bell doubling an octave up on the strong beats.
+        if (step === 0 || step === 4) this.tone(m + 12, t, beat * 1.2, 'sine', 0.022, 6000);
+      }
       // Light percussion: thump on the strong beats, brushed hat between.
       if (step % 4 === 0) this.thump(t);
       else if (step % 2 === 1) this.hat(t);
@@ -128,7 +143,7 @@ export class AudioFx {
 
   private tone(
     midi: number, t: number, dur: number,
-    type: OscillatorType, vol: number, cutoff: number, detune = 0,
+    type: OscillatorType, vol: number, cutoff: number, detune = 0, attack = 0.015,
   ): void {
     const ctx = this.ctx!;
     const lp = ctx.createBiquadFilter();
@@ -136,8 +151,8 @@ export class AudioFx {
     lp.frequency.value = cutoff;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
-    g.gain.setValueAtTime(vol * 0.8, t + dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(vol, t + attack);
+    g.gain.setValueAtTime(vol * 0.8, t + Math.max(attack, dur * 0.6));
     g.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.06);
     lp.connect(g).connect(this.musicGain);
     for (const d of detune ? [-detune, detune] : [0]) {
