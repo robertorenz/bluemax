@@ -243,6 +243,18 @@
       white-space: nowrap;
     }
     #hsRank { font-size: 12px; color: var(--accent); margin: -12px 0 14px; letter-spacing: 1px; }
+    #killStats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px 22px;
+      max-width: 330px;
+      margin: -8px auto 16px;
+      font-size: 12.5px;
+      color: var(--text-dim);
+      text-align: left;
+    }
+    #killStats div { display: flex; justify-content: space-between; }
+    #killStats b { color: var(--accent); font-weight: 700; }
     #refuel {
       position: absolute;
       top: 90px; left: 50%;
@@ -499,6 +511,7 @@
         <h2 id="overReason">SHOT DOWN</h2>
         <div class="final-label">FINAL SCORE</div>
         <div class="final" id="finalScore">0</div>
+        <div id="killStats" class="hidden"></div>
         <div id="unlocked" class="hidden"></div>
         <div id="hsEntry" class="hidden">
           <div class="hs-label">NEW HIGH SCORE — ENTER YOUR INITIALS</div>

@@ -213,7 +213,7 @@ export interface Hud {
 
 export class Game {
   state: 'menu' | 'playing' | 'over' = 'menu';
-  onGameOver: (reason: string, score: number) => void = () => {};
+  onGameOver: (reason: string, score: number, tally: Record<string, number>) => void = () => {};
 
   private audio = new AudioFx();
   private planeType: PlaneType = DEFAULT_PLANE;
@@ -299,6 +299,7 @@ export class Game {
   private sortieKills = 0;
   private trainKills = 0;
   private balloonKills = 0;
+  private killTally: Record<string, number> = {};
   private canyonLow = 0;
   private lastHitAt = 0;
   private achFired = new Set<string>();
@@ -596,7 +597,8 @@ export class Game {
     if (el && ob) el.textContent = `🎯 DESTROY ${ob.need} ${ob.label} (${ob.have}/${ob.need})`;
   }
 
-  private registerKill(key: string): void {
+  private registerKill(key: string, tallyKey = key): void {
+    this.killTally[tallyKey] = (this.killTally[tallyKey] ?? 0) + 1;
     this.sortieKills++;
     if (this.sortieKills === 1) this.emitAchv('first-blood', 'First Blood', 250);
     if (key === 'train' && ++this.trainKills >= 4) this.emitAchv('train-robber', 'Train Robber', 600);
@@ -666,6 +668,7 @@ export class Game {
     this.sortieKills = 0;
     this.trainKills = 0;
     this.balloonKills = 0;
+    this.killTally = {};
     this.canyonLow = 0;
     this.photo = false;
     this.pickObjective(true);
@@ -1704,8 +1707,10 @@ export class Game {
               }
               this.score += e.score;
               if (e.ace) this.emitAchv('ace-hunter', 'Ace Hunter', 750);
+              const objKey = e.kind === 'blimp' ? 'zeppelin' : e.kind === 'balloon' ? 'balloon' : 'plane';
               this.registerKill(
-                e.kind === 'blimp' ? 'zeppelin' : e.kind === 'balloon' ? 'balloon' : 'plane',
+                objKey,
+                e.ace ? 'ace' : e.kind === 'bomber' ? 'bomber' : objKey,
               );
               this.removeEnemy(j);
             } else {
@@ -1989,7 +1994,7 @@ export class Game {
     this.player.visible = false;
     this.explode(this.player.position, 36);
     this.hud.refuel.classList.add('hidden');
-    this.onGameOver(reason, this.score);
+    this.onGameOver(reason, this.score, { ...this.killTally });
   }
 
   // ------------------------------------------------------------- hud

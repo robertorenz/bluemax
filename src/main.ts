@@ -318,10 +318,34 @@ function startGame(): void {
   updateTouchVisibility();
 }
 
-game.onGameOver = (reason, score) => {
+const KILL_LABELS: Record<string, string> = {
+  plane: 'Enemy planes', ace: 'Aces', bomber: 'Bombers', zeppelin: 'Zeppelins',
+  balloon: 'Balloons', building: 'Buildings', factory: 'Factories', tank: 'Tanks',
+  aagun: 'AA guns', car: 'Trucks', ship: 'Barges', bridge: 'Bridges',
+  depot: 'Fuel depots', windmill: 'Windmills', castle: 'Castles', train: 'Train cars',
+  hangar: 'Hangars', tower: 'Control towers', parked: 'Parked planes',
+  lighthouse: 'Lighthouses', warship: 'Warships',
+};
+
+game.onGameOver = (reason, score, tally) => {
   $('overReason').textContent = reason;
   $('finalScore').textContent = score.toLocaleString();
   $('hsRank').textContent = '';
+
+  // Sortie kill report, biggest hauls first.
+  const stats = $('killStats');
+  stats.innerHTML = '';
+  const entries = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  stats.classList.toggle('hidden', entries.length === 0);
+  for (const [key, count] of entries) {
+    const row = document.createElement('div');
+    const label = document.createElement('span');
+    label.textContent = KILL_LABELS[key] ?? key;
+    const num = document.createElement('b');
+    num.textContent = `×${count}`;
+    row.append(label, num);
+    stats.appendChild(row);
+  }
 
   // Career XP accumulates across every sortie; new planes may unlock.
   const prevXp = careerXp;
