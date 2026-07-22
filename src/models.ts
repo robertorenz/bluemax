@@ -27,7 +27,7 @@ export type Nation = 'uk' | 'de' | 'fr' | 'us' | 'ussr';
 
 /** Geometry recipe for one aircraft — enough knobs to make each type recognizable. */
 export interface PlaneForm {
-  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby' | 'p38';
+  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby' | 'p38' | 'tbf';
   nose: 'flat' | 'spinner' | 'radial' | 'chin';
   wings: { y: number; span: number; chord: number; stagger?: number }[];
   struts?: 'none' | 'pair' | 'quad';
@@ -73,6 +73,7 @@ function addMarking(g: THREE.Group, nation: Nation, x: number, ySurf: number, z:
  */
 export function makePlane(form: PlaneForm, body: number, wing: number, detail: number): PlaneModel {
   if (form.fuselage === 'p38') return makeP38(body, wing, detail, form);
+  if (form.fuselage === 'tbf') return makeTBF(body, wing, detail, form);
   const g = new THREE.Group();
 
   // Fuselage.
@@ -305,6 +306,90 @@ function makeP38(body: number, wing: number, detail: number, form: PlaneForm): P
   g.add(box(boomX * 2 + 1.3, 0.15, 1.15, wing, 0, 1.45, 4.35));
 
   return { group: g, prop, prop2 };
+}
+
+/**
+ * Grumman TBF Avenger, drawn in detail: portly carrier-bomber fuselage, big
+ * radial cowl, long greenhouse canopy ending in a dorsal gun turret, ventral
+ * gunner station, tall rounded fin — and the torpedo slung under the belly.
+ */
+function makeTBF(body: number, wing: number, detail: number, form: PlaneForm): PlaneModel {
+  const g = new THREE.Group();
+  const glass = new THREE.MeshLambertMaterial({ color: 0x7fa8c9, transparent: true, opacity: 0.85 });
+
+  // Portly fuselage with rounded spine and tapering tail.
+  g.add(box(1.6, 1.7, 6.4, body, 0, 1.15, 0.2));
+  g.add(box(1.15, 0.55, 4.2, body, 0, 2.1, 0.9));
+  g.add(box(1.0, 1.15, 1.8, body, 0, 1.25, 3.6));
+
+  // Big radial engine.
+  const cowl = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 0.98, 1.35, 12), lambert(0x3a4046));
+  cowl.rotation.x = Math.PI / 2;
+  cowl.position.set(0, 1.15, -3.05);
+  cowl.castShadow = true;
+  g.add(cowl);
+  const spin = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.55, 10), lambert(detail));
+  spin.rotation.x = -Math.PI / 2;
+  spin.position.set(0, 1.15, -3.9);
+  g.add(spin);
+  const prop = box(0.2, 3.1, 0.1, 0x3c342a, 0, 1.15, -3.78);
+  g.add(prop);
+
+  // Long greenhouse canopy stepping down toward the turret.
+  const seg1 = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.62, 1.5), glass);
+  seg1.position.set(0, 2.45, -0.8);
+  g.add(seg1);
+  const seg2 = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 1.7), glass);
+  seg2.position.set(0, 2.42, 0.8);
+  g.add(seg2);
+  // Dorsal ball turret with gun.
+  const turret = new THREE.Mesh(new THREE.SphereGeometry(0.55, 10, 8), glass);
+  turret.position.set(0, 2.5, 2.2);
+  g.add(turret);
+  const tGun = box(0.08, 0.08, 1.1, 0x22262a, 0, 2.75, 2.9);
+  tGun.rotation.x = -0.5;
+  g.add(tGun);
+  // Ventral gunner step.
+  g.add(box(0.85, 0.5, 1.2, body, 0, 0.45, 2.9));
+  const vWin = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.7), glass);
+  vWin.position.set(0, 0.4, 3.4);
+  g.add(vWin);
+
+  // Mid-set wings with strong dihedral and insignia.
+  g.add(box(6, 0.26, 2.8, wing, 0, 1.0, -0.3));
+  const dih = 0.09;
+  const outerSpan = 3.8;
+  for (const side of [-1, 1] as const) {
+    const px = side * (3 + outerSpan / 2 - 0.05);
+    const py = 1.0 + (Math.sin(dih) * outerSpan) / 2;
+    const panel = box(outerSpan, 0.24, 2.3, wing, px, py, -0.25);
+    panel.rotation.z = side * dih;
+    g.add(panel);
+    const tip = box(1.2, 0.2, 1.5, wing, side * (3 + outerSpan + 0.4), 1.0 + Math.sin(dih) * outerSpan, -0.2);
+    tip.rotation.z = side * dih;
+    g.add(tip);
+    if (form.nation) addMarking(g, form.nation, px, py + 0.16, -0.25);
+  }
+
+  // Tall rounded fin and broad tailplane.
+  g.add(box(0.16, 2.3, 1.6, body, 0, 2.9, 4.3));
+  g.add(box(0.16, 1.0, 2.1, body, 0, 2.1, 4.2));
+  g.add(box(5.6, 0.16, 1.3, wing, 0, 1.5, 4.2));
+
+  // The torpedo.
+  const torp = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 3.1, 10), lambert(0x6e7276));
+  torp.rotation.x = Math.PI / 2;
+  torp.position.set(0, 0.05, 0.2);
+  torp.castShadow = true;
+  g.add(torp);
+  const tNose = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), lambert(0x5a5e62));
+  tNose.position.set(0, 0.05, -1.4);
+  tNose.scale.z = 1.4;
+  g.add(tNose);
+  g.add(box(0.7, 0.08, 0.5, 0x5a5e62, 0, 0.05, 1.85));
+  g.add(box(0.08, 0.7, 0.5, 0x5a5e62, 0, 0.05, 1.85));
+
+  return { group: g, prop };
 }
 
 /** Enemy archetype geometry: generic mono/bi/tri forms for the red air force. */

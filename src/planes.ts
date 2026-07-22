@@ -109,6 +109,10 @@ export const PLANES: PlaneDef[] = [
       wings: [{ y: 0.5, span: 11, chord: 2.2 }] },
     steer: 62, climb: 17.5, dive: 24, bombs: 32, gunMs: 100,
     body: 0x9aa2ab, wing: 0xc2c9d1, detail: 0x4a5560, xp: 50000 },
+  { id: 'tbf', label: 'TBF Avenger', year: 1942, desc: 'Navy torpedo bomber: 46 bombs, built like a tank',
+    form: { fuselage: 'tbf', nose: 'radial', nation: 'us', wings: [] },
+    steer: 44, climb: 13, dive: 19, bombs: 46, gunMs: 135,
+    body: 0x3d5166, wing: 0x51677e, detail: 0x8fa3b5, xp: 55000 },
 ];
 
 export const PLANE_MAP: Record<string, PlaneDef> =
