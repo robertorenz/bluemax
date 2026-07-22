@@ -205,7 +205,7 @@ const hsName = $('hsName') as HTMLInputElement;
 function renderList(entries: ScoreEntry[], highlight: ScoreEntry | null): void {
   const list = $('hsList');
   list.innerHTML = '';
-  for (const [i, s] of entries.slice(0, 5).entries()) {
+  for (const [i, s] of entries.slice(0, 10).entries()) {
     const li = document.createElement('li');
     if (highlight && s.name === highlight.name && s.score === highlight.score) {
       li.className = 'latest';
@@ -223,7 +223,7 @@ function renderList(entries: ScoreEntry[], highlight: ScoreEntry | null): void {
 
 function renderScores(highlight: ScoreEntry | null): void {
   // Local table shows instantly; the shared leaderboard replaces it when it answers.
-  $('hsHeading').textContent = remoteEnabled() ? 'GLOBAL TOP 5' : 'TOP 5';
+  $('hsHeading').textContent = remoteEnabled() ? 'GLOBAL TOP 10' : 'TOP 10';
   renderList(loadScores(), highlight);
   if (remoteEnabled()) {
     void fetchGlobalScores().then((global) => {
