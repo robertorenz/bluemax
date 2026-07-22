@@ -37,7 +37,7 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
 | ← → | Steer left / right |
 | ↑ ↓ | Climb / dive (altitude) |
 | SPACE | Machine guns |
-| B | Drop bomb |
+| B | Drop bombs (hold to walk a stick of bombs across a target) |
 | M | Mute sound |
 | F | Fullscreen |
 

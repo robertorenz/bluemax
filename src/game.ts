@@ -155,7 +155,7 @@ const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: numb
   bridge:   { hp: 2, score: 150, radius: 16 },
   ship:     { hp: 1, score: 100, radius: 14 },
   car:      { hp: 1, score: 60, radius: 12 },
-  castle:   { hp: 4, score: 400, radius: 22 },
+  castle:   { hp: 3, score: 400, radius: 22 },
   windmill: { hp: 1, score: 100, radius: 14 },
   train:    { hp: 1, score: 80, radius: 12 },
   hangar:   { hp: 2, score: 150, radius: 16 },
@@ -846,7 +846,7 @@ export class Game {
       }
     }
     if (this.keys.has('b') && this.now > this.nextBombAt && this.alt > 3 && this.bombsLeft >= 1) {
-      this.nextBombAt = this.now + 750;
+      this.nextBombAt = this.now + 320; // quick stick drops — hold B to walk bombs across a target
       this.bombsLeft -= 1;
       this.audio.bombWhistle(Math.sqrt((2 * Math.max(1, p.y)) / GRAVITY));
       const bomb = makeBomb();
