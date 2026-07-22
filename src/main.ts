@@ -198,6 +198,7 @@ function startGame(): void {
   hudEl.classList.remove('hidden');
   updateBest();
   game.start(selectedPlane);
+  updateTouchVisibility();
 }
 
 game.onGameOver = (reason, score) => {
@@ -226,6 +227,7 @@ game.onGameOver = (reason, score) => {
   }
   renderScores(null);
   overEl.classList.remove('hidden');
+  updateTouchVisibility();
 };
 
 $('startBtn').addEventListener('click', startGame);
@@ -249,12 +251,35 @@ window.addEventListener('keydown', (e) => {
 
 // ---------------------------------------------------------------- touch controls
 
-function setupTouch(): void {
-  if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) return;
-  const touchEl = $('touch');
+const touchEl = $('touch');
+let touchEnabled = false;
+
+/** Joystick and buttons appear only on touch devices, and only while flying. */
+function updateTouchVisibility(): void {
+  touchEl.classList.toggle('hidden', !(touchEnabled && game.state === 'playing'));
+}
+
+function enableTouch(): void {
+  if (touchEnabled) return;
+  touchEnabled = true;
+  wireTouch();
+  updateTouchVisibility();
+}
+
+if (
+  'ontouchstart' in window ||
+  navigator.maxTouchPoints > 0 ||
+  window.matchMedia('(pointer: coarse)').matches
+) {
+  enableTouch();
+} else {
+  // Fallback: the first real touch anywhere proves this is a touch device.
+  window.addEventListener('touchstart', enableTouch, { once: true });
+}
+
+function wireTouch(): void {
   const stick = $('stick');
   const nub = $('stickNub');
-  touchEl.classList.remove('hidden');
 
   const DEAD = 14; // px of drag before a direction engages
   const held = new Set<string>();
@@ -306,7 +331,6 @@ function setupTouch(): void {
   bindButton('fireBtn', ' ');
   bindButton('bombBtn', 'b');
 }
-setupTouch();
 
 // Fixed-ish timestep loop with a delta clamp so tab-switches don't teleport things.
 let last = performance.now();
