@@ -20,6 +20,7 @@ const hud: Hud = {
   bombs: $('bombs'),
   fuelbar: $('fuelbar'),
   altbar: $('altbar'),
+  heatbar: $('heatbar'),
   altval: $('altval'),
   refuel: $('refuel'),
 };

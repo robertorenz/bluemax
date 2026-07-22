@@ -208,6 +208,7 @@ export interface Hud {
   bombs: HTMLElement;
   fuelbar: HTMLElement;
   altbar: HTMLElement;
+  heatbar: HTMLElement;
   altval: HTMLElement;
   refuel: HTMLElement;
 }
@@ -263,6 +264,8 @@ export class Game {
   private alt = 15;
   private fuel = 100;
   private bombsLeft = 30;
+  private gunHeat = 0;
+  private overheated = false;
   private lives = 3;
   private score = 0;
   private now = 0;
@@ -646,6 +649,8 @@ export class Game {
     this.alt = 15;
     this.fuel = 100;
     this.bombsLeft = this.maxBombs;
+    this.gunHeat = 0;
+    this.overheated = false;
     this.lives = 3;
     this.score = 0;
     this.invulnUntil = 0;
@@ -839,8 +844,17 @@ export class Game {
     }
 
     // Weapons.
-    if (this.keys.has(' ') && this.now > this.nextGunAt) {
+    // Guns build heat with every shot; overheating locks them until they cool.
+    this.gunHeat = Math.max(0, this.gunHeat - 22 * dt);
+    if (this.overheated && this.gunHeat <= 55) this.overheated = false;
+    if (this.keys.has(' ') && this.now > this.nextGunAt && !this.overheated) {
       this.nextGunAt = this.now + stats.gunMs;
+      this.gunHeat += 6;
+      if (this.gunHeat >= 100) {
+        this.gunHeat = 100;
+        this.overheated = true;
+        this.showAlert('⚠ GUNS OVERHEATED');
+      }
       this.audio.gun();
       for (const gx of [-1.1, 1.1]) {
         this.spawnBullet(
@@ -2046,5 +2060,8 @@ export class Game {
       this.fuel < 25 ? 'var(--danger)' : 'var(--good)';
     (this.hud.altbar as HTMLElement).style.width = `${(this.alt / MAX_ALT) * 100}%`;
     this.hud.altval.textContent = String(Math.round(this.alt));
+    (this.hud.heatbar as HTMLElement).style.width = `${this.gunHeat}%`;
+    (this.hud.heatbar as HTMLElement).style.background =
+      this.overheated ? 'var(--danger)' : this.gunHeat > 60 ? 'var(--accent)' : 'var(--steel)';
   }
 }
