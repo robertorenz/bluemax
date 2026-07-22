@@ -849,7 +849,9 @@ export class Game {
     if (this.overheated && this.gunHeat <= 55) this.overheated = false;
     if (this.keys.has(' ') && this.now > this.nextGunAt && !this.overheated) {
       this.nextGunAt = this.now + stats.gunMs;
-      this.gunHeat += 6;
+      // Tuned so every airframe gets ~30 continuous shots before overheating,
+      // regardless of its fire rate (cooling runs during the burst).
+      this.gunHeat += 100 / 30 + 0.022 * stats.gunMs;
       if (this.gunHeat >= 100) {
         this.gunHeat = 100;
         this.overheated = true;
