@@ -380,7 +380,7 @@ export function makeRoad(params: RiverParams): THREE.Group {
   for (let z = -RIVER_LEN / 2 + 80; z < RIVER_LEN / 2 - 80; z += 26) {
     const dx = riverXAt(params, z + 3) - riverXAt(params, z - 3);
     const dash = box(0.7, 0.04, 5.5, 0xe8e6da, riverXAt(params, z), 0.15, z);
-    dash.rotation.y = -Math.atan2(dx, 6);
+    dash.rotation.y = Math.atan2(dx, 6);
     dash.castShadow = false;
     g.add(dash);
   }
