@@ -148,6 +148,19 @@ export class Game {
   private playerProp!: THREE.Mesh;
   private chunks: THREE.Group[] = [];
   private clouds: THREE.Group[] = [];
+  private cloudMats: THREE.MeshLambertMaterial[] = [];
+
+  // Weather: 0 = clear skies, 1 = full storm.
+  private sun!: THREE.DirectionalLight;
+  private hemi!: THREE.HemisphereLight;
+  private skyCtx!: CanvasRenderingContext2D;
+  private skyTex!: THREE.CanvasTexture;
+  private rain!: THREE.Points;
+  private rainPos!: Float32Array;
+  private weather = 0;
+  private weatherTarget = 0;
+  private nextWeatherAt = 0;
+  private lastSkyW = -1;
 
   private enemies: AirEnemy[] = [];
   private groundObjs: GroundObj[] = [];
@@ -205,20 +218,32 @@ export class Game {
     const c = document.createElement('canvas');
     c.width = 2;
     c.height = 512;
-    const ctx = c.getContext('2d')!;
-    const grad = ctx.createLinearGradient(0, 0, 0, 512);
-    grad.addColorStop(0, P.skyTop);
-    grad.addColorStop(0.55, P.skyMid);
-    grad.addColorStop(1, P.horizon);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 2, 512);
-    this.scene.background = new THREE.CanvasTexture(c);
+    this.skyCtx = c.getContext('2d')!;
+    this.skyTex = new THREE.CanvasTexture(c);
+    this.scene.background = this.skyTex;
     this.scene.fog = new THREE.Fog(P.fog, 260, 640);
+    this.paintSky(0);
+  }
+
+  /** Repaint the sky gradient blended toward storm colors by w (0..1). */
+  private paintSky(w: number): void {
+    const mix = (a: string, b: string): string =>
+      '#' + new THREE.Color(a).lerp(new THREE.Color(b), w).getHexString();
+    const grad = this.skyCtx.createLinearGradient(0, 0, 0, 512);
+    grad.addColorStop(0, mix(P.skyTop, '#38434f'));
+    grad.addColorStop(0.55, mix(P.skyMid, '#5a6570'));
+    grad.addColorStop(1, mix(P.horizon, '#727d87'));
+    this.skyCtx.fillStyle = grad;
+    this.skyCtx.fillRect(0, 0, 2, 512);
+    this.skyTex.needsUpdate = true;
+    this.lastSkyW = w;
   }
 
   private buildLights(): void {
-    this.scene.add(new THREE.HemisphereLight(0xbfd6e8, 0x3a5230, 0.95));
+    this.hemi = new THREE.HemisphereLight(0xbfd6e8, 0x3a5230, 0.95);
+    this.scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff2dd, 1.7);
+    this.sun = sun;
     sun.position.set(80, 150, -40);
     sun.target.position.set(0, 0, -120);
     sun.castShadow = true;
@@ -248,8 +273,73 @@ export class Game {
         60 - Math.random() * 600,
       );
       this.clouds.push(cloud);
+      this.cloudMats.push((cloud.children[0] as THREE.Mesh).material as THREE.MeshLambertMaterial);
       this.scene.add(cloud);
     }
+    this.buildRain();
+  }
+
+  private buildRain(): void {
+    const COUNT = 900;
+    this.rainPos = new Float32Array(COUNT * 3);
+    for (let i = 0; i < COUNT; i++) {
+      this.rainPos[i * 3] = (Math.random() - 0.5) * 480;
+      this.rainPos[i * 3 + 1] = Math.random() * 55;
+      this.rainPos[i * 3 + 2] = 80 - Math.random() * 500;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(this.rainPos, 3));
+    this.rain = new THREE.Points(
+      geo,
+      new THREE.PointsMaterial({
+        color: 0xaebfce,
+        size: 0.4,
+        transparent: true,
+        opacity: 0,
+        depthWrite: false,
+      }),
+    );
+    this.rain.visible = false;
+    this.scene.add(this.rain);
+  }
+
+  /** Slow weather cycles: clear → overcast → rain and back. */
+  private updateWeather(dt: number): void {
+    if (this.now > this.nextWeatherAt) {
+      const roll = Math.random();
+      this.weatherTarget = roll < 0.45 ? 0 : roll < 0.75 ? 0.55 : 1;
+      this.nextWeatherAt = this.now + 45000 + Math.random() * 40000;
+    }
+    this.weather = THREE.MathUtils.damp(this.weather, this.weatherTarget, 0.12, dt);
+    const w = this.weather;
+
+    this.sun.intensity = THREE.MathUtils.lerp(1.7, 0.55, w);
+    this.hemi.intensity = THREE.MathUtils.lerp(0.95, 0.55, w);
+    const fog = this.scene.fog as THREE.Fog;
+    fog.color.set(P.fog).lerp(new THREE.Color(0x6b7683), w);
+    fog.near = THREE.MathUtils.lerp(260, 170, w);
+    fog.far = THREE.MathUtils.lerp(640, 430, w);
+    for (const m of this.cloudMats) {
+      m.color.set(0xffffff).lerp(new THREE.Color(0x4b525c), w);
+    }
+    if (Math.abs(w - this.lastSkyW) > 0.02) this.paintSky(w);
+
+    // Rain streaks fade in past the overcast stage.
+    const rainAmount = THREE.MathUtils.clamp((w - 0.6) / 0.4, 0, 1);
+    this.rain.visible = rainAmount > 0.02;
+    (this.rain.material as THREE.PointsMaterial).opacity = 0.55 * rainAmount;
+    if (this.rain.visible) {
+      for (let i = 0; i < this.rainPos.length; i += 3) {
+        this.rainPos[i + 1] -= 58 * dt;
+        if (this.rainPos[i + 1] < 0) {
+          this.rainPos[i] = (Math.random() - 0.5) * 480;
+          this.rainPos[i + 1] = 50 + Math.random() * 8;
+          this.rainPos[i + 2] = 80 - Math.random() * 500;
+        }
+      }
+      (this.rain.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    }
+    this.audio.setRain(rainAmount);
   }
 
   private buildPlayer(): void {
@@ -377,6 +467,7 @@ export class Game {
     }
 
     this.updateTerrain(dt);
+    this.updateWeather(dt);
     this.updateEffects(dt);
     this.updateCamera(dt);
     this.renderer.render(this.scene, this.camera);

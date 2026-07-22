@@ -10,6 +10,7 @@ export class AudioFx {
   private engineFilter!: BiquadFilterNode;
   private engineOscA!: OscillatorNode;
   private engineOscB!: OscillatorNode;
+  private rainGain!: GainNode;
   private noise!: AudioBuffer;
   private muted = false;
 
@@ -48,6 +49,24 @@ export class AudioFx {
     this.engineGain.connect(this.master);
     this.engineOscA.start();
     this.engineOscB.start();
+
+    // Rain: looped noise through a lowpass, silent until weather calls for it.
+    const rainSrc = ctx.createBufferSource();
+    rainSrc.buffer = this.noise;
+    rainSrc.loop = true;
+    const rainLp = ctx.createBiquadFilter();
+    rainLp.type = 'lowpass';
+    rainLp.frequency.value = 950;
+    this.rainGain = ctx.createGain();
+    this.rainGain.gain.value = 0;
+    rainSrc.connect(rainLp).connect(this.rainGain).connect(this.master);
+    rainSrc.start();
+  }
+
+  /** Rain bed volume; intensity 0..1. */
+  setRain(intensity: number): void {
+    if (!this.ctx) return;
+    this.rainGain.gain.setTargetAtTime(intensity * 0.13, this.ctx.currentTime, 0.6);
   }
 
   /** Drive the engine drone; intensity 0..1 maps to rpm pitch and volume. */
