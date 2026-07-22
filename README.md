@@ -54,6 +54,11 @@ appear automatically — drag the stick to steer and climb/dive.
   while you're on the ground and the camera banks with your turns in flight.
 - **Damage states** — a direct bomb hit flattens a target; a near miss leaves it
   charred, smoking, and out of action. Wreckage stays on the map instead of vanishing.
+- **Living landscape** — the world drifts between biome regions as you fly:
+  organic-patchwork farmland (with strip-farmed bands and plowed brown furrows),
+  dense forest country, flower-speckled meadows, dry steppe, and snowy alpine.
+  Rolling hills, steep peaks, canyons, ponds, villages, windmills, and castles
+  punctuate the terrain.
 - **Rivers & roads** — long meandering rivers and country roads arrive from the
   distance, wander across the corridor and off to the sides (and back). Rivers
   carry bombable bridges and barges; roads carry truck convoys driving both

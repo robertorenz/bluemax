@@ -26,7 +26,26 @@ const ENEMY_INFO: Record<EnemyKind, {
   tri:   { hp: 3, score: 150, hitR: 4.2, shape: 'tri',   body: 0x9c3b34, wing: 0xd0685c },
   blimp: { hp: 7, score: 300, hitR: 10,  shape: 'blimp', body: 0, wing: 0 },
 };
-import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
+import { makeChunk, CHUNK_D, CHUNK_COUNT, type Biome } from './terrain';
+
+const BIOMES: { biome: Biome; weight: number }[] = [
+  { biome: 'farmland', weight: 0.38 },
+  { biome: 'forest', weight: 0.2 },
+  { biome: 'steppe', weight: 0.16 },
+  { biome: 'meadow', weight: 0.14 },
+  { biome: 'alpine', weight: 0.12 },
+];
+
+function disposeGroup(group: THREE.Group): void {
+  group.traverse((obj) => {
+    if (obj instanceof THREE.Mesh) {
+      obj.geometry.dispose();
+      const mat = obj.material as THREE.Material | THREE.Material[];
+      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+      else mat.dispose();
+    }
+  });
+}
 
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
 const PLAYER_Z = -48;     // plane sits well ahead of the camera so bomb impacts land mid-screen
@@ -176,6 +195,8 @@ export class Game {
   private skyTex!: THREE.CanvasTexture;
   private rain!: THREE.Points;
   private rainPos!: Float32Array;
+  private currentBiome: Biome = 'farmland';
+  private nextBiomeAt = 45000;
   private weather = 0;
   private weatherTarget = 0;
   private nextWeatherAt = 0;
@@ -1362,10 +1383,30 @@ export class Game {
   // ------------------------------------------------------------- world & fx
 
   private updateTerrain(dt: number): void {
-    for (const chunk of this.chunks) {
+    // The landscape drifts between biome regions over time.
+    if (this.now > this.nextBiomeAt) {
+      this.nextBiomeAt = this.now + 50000 + Math.random() * 40000;
+      let roll = Math.random();
+      for (const { biome, weight } of BIOMES) {
+        roll -= weight;
+        if (roll <= 0) {
+          this.currentBiome = biome;
+          break;
+        }
+      }
+    }
+    for (let i = 0; i < this.chunks.length; i++) {
+      const chunk = this.chunks[i];
       chunk.position.z += this.scroll * dt;
       if (chunk.position.z > 120 + CHUNK_D / 2) {
-        chunk.position.z -= CHUNK_D * CHUNK_COUNT;
+        // Recycle by rebuilding in the current biome.
+        const z = chunk.position.z - CHUNK_D * CHUNK_COUNT;
+        this.scene.remove(chunk);
+        disposeGroup(chunk);
+        const fresh = makeChunk(this.currentBiome);
+        fresh.position.z = z;
+        this.scene.add(fresh);
+        this.chunks[i] = fresh;
       }
     }
     for (const cloud of this.clouds) {
