@@ -123,8 +123,10 @@ Pushes to `master` auto-deploy to GitHub Pages via the workflow in
 
 - [Three.js](https://threejs.org/) — WebGL renderer (low-poly meshes, directional
   shadows, fog, vertex-colored terrain chunks)
-- WebAudio — fully procedural sound (engine drone, guns, bomb whistle, explosions);
-  no audio files
+- WebAudio — fully procedural sound (engine drone, guns, bomb whistle, explosions,
+  rain, thunder) **and a generative adventure theme**: an 8-bar heroic loop with
+  bass, chord pads, soaring lead, and percussion, all sequenced from oscillators;
+  no audio files anywhere
 - [TypeScript](https://www.typescriptlang.org/) — strict mode
 - [Vite](https://vitejs.dev/) — dev server + bundler
 - DOM/CSS HUD and modal overlays (no in-canvas UI); fills the browser window and

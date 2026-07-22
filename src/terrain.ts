@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeTree, makeCactus, makeCow, makeSheep } from './models';
+import { makeTree, makeCactus, makeSequoia, makeCow, makeSheep } from './models';
 
 export const CHUNK_D = 240; // depth (z) of one terrain chunk
 export const CHUNK_COUNT = 4;
@@ -171,6 +171,19 @@ export function makeChunk(biome: Biome = 'farmland'): THREE.Group {
       -CHUNK_D / 2 + Math.random() * CHUNK_D,
     );
     group.add(tree);
+  }
+
+  // Every so often, a grove of giant sequoias towers over the country.
+  if ((biome === 'forest' || biome === 'farmland' || biome === 'meadow') && Math.random() < 0.22) {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const gx = side * (60 + Math.random() * 200);
+    const gz = -CHUNK_D / 2 + 30 + Math.random() * (CHUNK_D - 60);
+    const n = 3 + Math.floor(Math.random() * 4);
+    for (let i = 0; i < n; i++) {
+      const giant = makeSequoia();
+      giant.position.set(gx + (Math.random() - 0.5) * 18, 0, gz + (Math.random() - 0.5) * 18);
+      group.add(giant);
+    }
   }
 
   // Livestock herds graze the open country.

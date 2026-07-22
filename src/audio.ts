@@ -3,6 +3,26 @@
  * The context is created lazily from the first user gesture (start button),
  * so every method is a safe no-op until init() has run.
  */
+// ---------------------------------------------------------------- music score
+// An 8-bar heroic flying theme, composed as data: C - G - Am - F twice around,
+// with an arcing melody. MIDI note numbers; null = rest. 8 eighth-notes per bar.
+const MUSIC_ROOTS = [48, 43, 45, 41, 48, 43, 41, 43]; // C3 G2 A2 F2 ...
+const MUSIC_TRIADS = [
+  [60, 64, 67], [59, 62, 67], [57, 60, 64], [57, 60, 65],
+  [60, 64, 67], [59, 62, 67], [57, 60, 65], [59, 62, 67],
+];
+const MUSIC_MELODY: (number | null)[][] = [
+  [72, null, 67, 72, 74, null, 76, null],
+  [74, 72, 71, 67, 71, null, 67, null],
+  [69, null, 72, 69, 76, null, 72, null],
+  [74, 71, 69, 67, 65, 67, 69, 71],
+  [72, null, 67, 72, 74, null, 76, 79],
+  [79, 76, 74, 71, 74, null, 71, null],
+  [69, 72, 76, 72, 77, 76, 74, 72],
+  [74, null, 71, null, 72, null, null, null],
+];
+const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
+
 export class AudioFx {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -13,6 +33,10 @@ export class AudioFx {
   private rainGain!: GainNode;
   private noise!: AudioBuffer;
   private muted = false;
+  private musicGain!: GainNode;
+  private musicOn = false;
+  private nextNoteTime = 0;
+  private songPos = 0;
 
   init(): void {
     if (this.ctx) {
@@ -61,6 +85,99 @@ export class AudioFx {
     this.rainGain.gain.value = 0;
     rainSrc.connect(rainLp).connect(this.rainGain).connect(this.master);
     rainSrc.start();
+  }
+
+  // ------------------------------------------------------------- music
+
+  /** Start the looping adventure theme (safe to call repeatedly). */
+  startMusic(): void {
+    if (!this.ctx || this.musicOn) return;
+    this.musicOn = true;
+    this.musicGain = this.ctx.createGain();
+    this.musicGain.gain.value = 0.5;
+    this.musicGain.connect(this.master);
+    this.nextNoteTime = this.ctx.currentTime + 0.15;
+    window.setInterval(() => this.scheduleMusic(), 200);
+  }
+
+  private scheduleMusic(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const beat = 60 / 116; // 116 BPM
+    const eighth = beat / 2;
+    while (this.nextNoteTime < ctx.currentTime + 0.6) {
+      const bar = Math.floor(this.songPos / 8) % 8;
+      const step = this.songPos % 8;
+      const t = this.nextNoteTime;
+      // Driving bass on the quarters.
+      if (step % 2 === 0) this.tone(MUSIC_ROOTS[bar], t, beat * 0.85, 'sawtooth', 0.075, 320);
+      // Warm pad chord at each bar line.
+      if (step === 0) {
+        for (const n of MUSIC_TRIADS[bar]) this.tone(n, t, beat * 3.8, 'triangle', 0.028, 900);
+      }
+      // Soaring lead.
+      const m = MUSIC_MELODY[bar][step];
+      if (m !== null) this.tone(m, t, eighth * 0.92, 'square', 0.042, 1900, 6);
+      // Light percussion: thump on the strong beats, brushed hat between.
+      if (step % 4 === 0) this.thump(t);
+      else if (step % 2 === 1) this.hat(t);
+      this.songPos++;
+      this.nextNoteTime += eighth;
+    }
+  }
+
+  private tone(
+    midi: number, t: number, dur: number,
+    type: OscillatorType, vol: number, cutoff: number, detune = 0,
+  ): void {
+    const ctx = this.ctx!;
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = cutoff;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.015);
+    g.gain.setValueAtTime(vol * 0.8, t + dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.06);
+    lp.connect(g).connect(this.musicGain);
+    for (const d of detune ? [-detune, detune] : [0]) {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = midiHz(midi);
+      o.detune.value = d;
+      o.connect(lp);
+      o.start(t);
+      o.stop(t + dur + 0.1);
+    }
+  }
+
+  private thump(t: number): void {
+    const ctx = this.ctx!;
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(105, t);
+    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.16, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    o.connect(g).connect(this.musicGain);
+    o.start(t);
+    o.stop(t + 0.16);
+  }
+
+  private hat(t: number): void {
+    const ctx = this.ctx!;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 6000;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.035, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    src.connect(hp).connect(g).connect(this.musicGain);
+    src.start(t, Math.random() * 0.8);
+    src.stop(t + 0.06);
   }
 
   /** Rain bed volume; intensity 0..1. */

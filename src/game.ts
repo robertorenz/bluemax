@@ -680,6 +680,7 @@ export class Game {
     this.speedFactor = 1;
     this.activeRunway = null;
     this.audio.init();
+    this.audio.startMusic();
     this.state = 'playing';
   }
 

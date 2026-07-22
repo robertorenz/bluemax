@@ -1087,6 +1087,21 @@ export function makeRunway(): THREE.Group {
   return g;
 }
 
+/** Giant sequoia: massive tapered red trunk, tall narrow crown. */
+export function makeSequoia(): THREE.Group {
+  const g = new THREE.Group();
+  const h = 11 + Math.random() * 6;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.95, h * 0.55, 8), lambert(0x7a4a34));
+  trunk.position.y = h * 0.275;
+  trunk.castShadow = true;
+  g.add(trunk);
+  const crown = new THREE.Mesh(new THREE.ConeGeometry(2.3, h * 0.75, 8), lambert(0x2c4a28));
+  crown.position.y = h * 0.55 + (h * 0.75) / 2 - 1;
+  crown.castShadow = true;
+  g.add(crown);
+  return g;
+}
+
 /** Desert cactus: saguaro with arms, or a squat barrel cactus. */
 export function makeCactus(): THREE.Group {
   const g = new THREE.Group();
@@ -1166,13 +1181,27 @@ export function makeTree(): THREE.Group {
   trunk.position.y = 0.65;
   g.add(trunk);
 
-  if (kind < 0.34) {
+  if (kind >= 0.64 && kind < 0.76) {
+    // Alder: dense oval crown in deep green.
+    const lower = new THREE.Mesh(new THREE.SphereGeometry(1.25 * s, 7, 5), lambert(0x44663c));
+    lower.scale.y = 1.1;
+    lower.position.y = 1.8 * s;
+    lower.castShadow = true;
+    g.add(lower);
+    const upper = new THREE.Mesh(new THREE.SphereGeometry(0.95 * s, 7, 5), lambert(0x4d7042));
+    upper.position.y = 2.9 * s;
+    upper.castShadow = true;
+    g.add(upper);
+    return g;
+  }
+
+  if (kind < 0.28) {
     // Pine.
     const top = new THREE.Mesh(new THREE.ConeGeometry(1.7 * s, 3.4 * s, 7), lambert(P.treeTop));
     top.position.y = 1.2 + 1.7 * s;
     top.castShadow = true;
     g.add(top);
-  } else if (kind < 0.6) {
+  } else if (kind < 0.5) {
     // Broadleaf: a cluster of leafy blobs.
     const shades = [0x3f6b32, 0x4a7a3a, 0x35592b];
     for (let i = 0; i < 3; i++) {
