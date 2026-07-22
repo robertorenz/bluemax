@@ -19,10 +19,10 @@ export interface PlaneModel {
   prop: THREE.Mesh;
 }
 
-export type PlaneType = 'mono' | 'bi' | 'tri';
+export type PlaneType = 'eindecker' | 'camel' | 'dr1' | 'albatros' | 'p40';
 
 /**
- * Low-poly WWI plane, nose pointing toward -z (the direction of flight).
+ * Low-poly military plane, nose pointing toward -z (the direction of flight).
  * Origin sits at the fuselage centerline so altitude == group.position.y.
  */
 export function makePlane(type: PlaneType, body: number, wing: number, detail: number): PlaneModel {
@@ -30,21 +30,35 @@ export function makePlane(type: PlaneType, body: number, wing: number, detail: n
 
   g.add(box(1.1, 1.0, 5.2, body, 0, 0.9, 0));           // fuselage
 
-  if (type === 'mono') {
+  if (type === 'eindecker') {
     g.add(box(10.5, 0.24, 2.2, wing, 0, 0.95, -0.6));    // single shoulder wing
-  } else if (type === 'bi') {
+  } else if (type === 'camel') {
     g.add(box(9, 0.22, 1.9, wing, 0, 1.95, -0.7));       // upper wing
     g.add(box(8, 0.22, 1.7, wing, 0, 0.3, -0.6));        // lower wing
     for (const sx of [-3.1, -1.2, 1.2, 3.1]) {           // struts
       g.add(box(0.12, 1.6, 0.12, detail, sx, 1.1, -0.7));
     }
-  } else {
+  } else if (type === 'dr1') {
     g.add(box(7, 0.22, 1.6, wing, 0, 0.25, -0.55));      // bottom wing
     g.add(box(8.4, 0.22, 1.8, wing, 0, 1.4, -0.65));     // middle wing
     g.add(box(7.4, 0.22, 1.6, wing, 0, 2.55, -0.7));     // top wing
     for (const sx of [-2.6, -1.1, 1.1, 2.6]) {           // tall struts
       g.add(box(0.12, 2.3, 0.12, detail, sx, 1.4, -0.62));
     }
+  } else if (type === 'albatros') {
+    // Sleek fighter: narrow staggered wings, single strut pair.
+    g.add(box(9.4, 0.2, 1.7, wing, 0, 1.7, -0.85));      // upper wing, forward stagger
+    g.add(box(8.4, 0.2, 1.5, wing, 0, 0.35, -0.45));     // lower wing
+    for (const sx of [-2.9, 2.9]) {
+      g.add(box(0.12, 1.35, 0.12, detail, sx, 1.0, -0.65));
+    }
+  } else {
+    // P-40: beefy low-wing monoplane with canopy and shark mouth.
+    g.add(box(1.3, 1.15, 6, body, 0, 0.95, 0.1));        // deeper fuselage
+    g.add(box(11, 0.26, 2.5, wing, 0, 0.5, -0.3));       // low wing
+    g.add(box(0.95, 0.55, 1.7, 0x2b3238, 0, 1.7, 0.4));  // canopy
+    g.add(box(0.95, 0.4, 1.2, 0xe8e4da, 0, 0.5, -2.35)); // shark teeth (white)
+    g.add(box(1.0, 0.14, 1.25, 0xa33226, 0, 0.5, -2.34)); // gum line (red)
   }
 
   g.add(box(3.2, 0.15, 1.2, wing, 0, 1.0, 2.5));         // tailplane
@@ -74,9 +88,24 @@ export function makePlane(type: PlaneType, body: number, wing: number, detail: n
   return { group: g, prop };
 }
 
-/** Enemy planes are classic biplanes. */
+/** Enemy planes default to classic biplanes. */
 export const makeBiplane = (body: number, wing: number, detail: number): PlaneModel =>
-  makePlane('bi', body, wing, detail);
+  makePlane('camel', body, wing, detail);
+
+/** Big slow zeppelin: ellipsoid hull, tail fins, gondola with a pusher prop. */
+export function makeBlimp(): PlaneModel {
+  const g = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), lambert(0x8e939b));
+  hull.scale.set(3.1, 3.1, 9);
+  hull.castShadow = true;
+  g.add(hull);
+  g.add(box(0.25, 3.6, 2.6, 0x767b83, 0, 0, 7.6));   // vertical fin
+  g.add(box(4.8, 0.25, 2.6, 0x767b83, 0, 0, 7.6));   // horizontal fins
+  g.add(box(1.5, 1.2, 4.4, 0x4d5157, 0, -3.5, 0));   // gondola
+  const prop = box(0.12, 1.5, 0.08, 0x3c342a, 0, -3.5, 2.5);
+  g.add(prop);
+  return { group: g, prop };
+}
 
 export function makeBuilding(): THREE.Group {
   const g = new THREE.Group();

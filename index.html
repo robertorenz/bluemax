@@ -154,9 +154,11 @@
     button.secondary:hover { border-color: var(--steel); filter: none; }
 
     /* ---------- Plane selection ---------- */
-    .planes { display: flex; gap: 10px; margin-bottom: 22px; }
+    #menu .modal { width: 640px; }
+    .planes { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
     .plane-card {
-      flex: 1;
+      flex: 1 1 30%;
+      min-width: 160px;
       border: 1px solid var(--panel-border);
       border-radius: 8px;
       padding: 12px 8px 10px;
@@ -212,20 +214,30 @@
         <h1>BLUE MAX</h1>
         <div class="sub">A modernized 2.5D homage to the 1983 classic</div>
         <div class="planes">
-          <div class="plane-card" data-plane="mono">
+          <div class="plane-card" data-plane="eindecker">
             <div class="wing-icon"><i></i></div>
-            <div class="p-name">MONOPLANE</div>
-            <div class="p-desc">Fast steering, sluggish climb</div>
+            <div class="p-name">FOKKER EINDECKER</div>
+            <div class="p-desc">1915 · fast steering, weak climb</div>
           </div>
-          <div class="plane-card" data-plane="bi">
+          <div class="plane-card" data-plane="camel">
             <div class="wing-icon"><i></i><i></i></div>
-            <div class="p-name">BIPLANE</div>
-            <div class="p-desc">The balanced classic</div>
+            <div class="p-name">SOPWITH CAMEL</div>
+            <div class="p-desc">1917 · balanced and agile</div>
           </div>
-          <div class="plane-card" data-plane="tri">
+          <div class="plane-card" data-plane="dr1">
             <div class="wing-icon"><i></i><i></i><i></i></div>
-            <div class="p-name">TRIPLANE</div>
-            <div class="p-desc">Superb climb, slow steering</div>
+            <div class="p-name">FOKKER DR.I</div>
+            <div class="p-desc">1917 · climbs like a demon</div>
+          </div>
+          <div class="plane-card" data-plane="albatros">
+            <div class="wing-icon"><i></i><i></i></div>
+            <div class="p-name">ALBATROS D.III</div>
+            <div class="p-desc">1917 · quick guns, 24 bombs</div>
+          </div>
+          <div class="plane-card" data-plane="p40">
+            <div class="wing-icon"><i></i></div>
+            <div class="p-name">P-40 FLYING TIGER</div>
+            <div class="p-desc">1941 · best all-round, 36 bombs</div>
           </div>
         </div>
         <div class="controls">

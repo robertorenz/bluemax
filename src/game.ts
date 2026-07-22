@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AudioFx } from './audio';
 import { P } from './palette';
 import {
-  makeBiplane, makePlane, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
+  makePlane, makeBlimp, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeBridge, makeBrokenBridge, makeShip, riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneType,
@@ -10,18 +10,36 @@ import {
 
 export type { PlaneType };
 
-/** Handling differences between the airframes. */
-const PLANE_STATS: Record<PlaneType, { steer: number; climb: number; dive: number }> = {
-  mono: { steer: 58, climb: 11.5, dive: 20 },
-  bi:   { steer: 46, climb: 14,   dive: 17 },
-  tri:  { steer: 38, climb: 17.5, dive: 15 },
+/** The hangar: handling, armament, and livery per airframe. */
+const PLANE_INFO: Record<PlaneType, {
+  steer: number; climb: number; dive: number;
+  bombs: number; gunMs: number;
+  body: number; wing: number; detail: number;
+}> = {
+  eindecker: { steer: 58, climb: 11.5, dive: 20, bombs: 30, gunMs: 150, body: 0xb8a878, wing: 0xd6c79a, detail: 0x6b5f47 },
+  camel:     { steer: 48, climb: 14.5, dive: 17, bombs: 30, gunMs: 150, body: 0x5d6b3f, wing: 0x8a9460, detail: 0xd8e4ee },
+  dr1:       { steer: 38, climb: 17.5, dive: 15, bombs: 30, gunMs: 150, body: 0x4a6d8c, wing: 0x7fa8c9, detail: 0xd8e4ee },
+  albatros:  { steer: 52, climb: 13,   dive: 19, bombs: 24, gunMs: 125, body: 0x6e7f6a, wing: 0x9aa98e, detail: 0x3c4a3a },
+  p40:       { steer: 55, climb: 15,   dive: 21, bombs: 36, gunMs: 115, body: 0x55663f, wing: 0x6b7c4d, detail: 0xd8e4ee },
+};
+
+type EnemyKind = 'bi' | 'mono' | 'tri' | 'blimp';
+
+const ENEMY_INFO: Record<EnemyKind, {
+  hp: number; score: number; hitR: number;
+  shape: PlaneType | 'blimp';
+  body: number; wing: number;
+}> = {
+  bi:    { hp: 2, score: 100, hitR: 4.2, shape: 'camel',     body: 0x8c4a45, wing: 0xc47a6e },
+  mono:  { hp: 1, score: 120, hitR: 4.2, shape: 'eindecker', body: 0x5a5f66, wing: 0x7d838c },
+  tri:   { hp: 3, score: 150, hitR: 4.2, shape: 'dr1',       body: 0x9c3b34, wing: 0xd0685c },
+  blimp: { hp: 7, score: 300, hitR: 10,  shape: 'blimp',     body: 0, wing: 0 },
 };
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
 const PLAYER_Z = -48;     // plane sits well ahead of the camera so bomb impacts land mid-screen
 const MAX_ALT = 38;
-const MAX_BOMBS = 30;
 const MIN_SAFE_ALT = 0.6; // below this off-runway = crash
 const LATERAL_RANGE = 26;
 const GRAVITY = 25;
@@ -29,6 +47,7 @@ const GRAVITY = 25;
 interface AirEnemy {
   group: THREE.Group;
   prop: THREE.Mesh;
+  kind: EnemyKind;
   mode: 'attack' | 'overtake';
   alt: number;
   speed: number;
@@ -119,7 +138,8 @@ export class Game {
   onGameOver: (reason: string, score: number) => void = () => {};
 
   private audio = new AudioFx();
-  private planeType: PlaneType = 'bi';
+  private planeType: PlaneType = 'camel';
+  private maxBombs = 30;
   private mode: 'flying' | 'landing' | 'takeoff' = 'flying';
   private speedFactor = 1;
   private cameraRoll = 0;
@@ -144,7 +164,7 @@ export class Game {
 
   private alt = 15;
   private fuel = 100;
-  private bombsLeft = MAX_BOMBS;
+  private bombsLeft = 30;
   private lives = 3;
   private score = 0;
   private now = 0;
@@ -244,9 +264,11 @@ export class Game {
   /** Swap the player's airframe; safe to call from the menu for a live preview. */
   choosePlane(type: PlaneType): void {
     this.planeType = type;
+    const info = PLANE_INFO[type];
+    this.maxBombs = info.bombs;
     const pos = this.player?.position.clone();
     if (this.player) this.scene.remove(this.player);
-    const { group, prop } = makePlane(type, P.playerBody, P.playerWing, P.playerDetail);
+    const { group, prop } = makePlane(type, info.body, info.wing, info.detail);
     group.position.copy(pos ?? new THREE.Vector3(0, this.alt, PLAYER_Z));
     group.scale.setScalar(1.25); // offset the extra camera distance
     this.player = group;
@@ -287,7 +309,7 @@ export class Game {
 
     this.alt = 15;
     this.fuel = 100;
-    this.bombsLeft = MAX_BOMBS;
+    this.bombsLeft = this.maxBombs;
     this.lives = 3;
     this.score = 0;
     this.invulnUntil = 0;
@@ -382,7 +404,7 @@ export class Game {
       return;
     }
 
-    const stats = PLANE_STATS[this.planeType];
+    const stats = PLANE_INFO[this.planeType];
     let bank = 0;
     let pitch = 0;
 
@@ -425,7 +447,7 @@ export class Game {
 
     // Weapons.
     if (this.keys.has(' ') && this.now > this.nextGunAt) {
-      this.nextGunAt = this.now + 150;
+      this.nextGunAt = this.now + stats.gunMs;
       this.audio.gun();
       for (const gx of [-1.1, 1.1]) {
         this.spawnBullet(
@@ -453,7 +475,7 @@ export class Game {
   private updateFuel(dt: number): void {
     if (this.mode === 'landing') {
       this.fuel = Math.min(100, this.fuel + 45 * dt);
-      this.bombsLeft = Math.min(MAX_BOMBS, this.bombsLeft + 12 * dt); // ground crew rearming
+      this.bombsLeft = Math.min(this.maxBombs, this.bombsLeft + 12 * dt); // ground crew rearming
       return;
     }
     if (this.mode === 'flying') this.hud.refuel.classList.add('hidden');
@@ -544,28 +566,45 @@ export class Game {
   }
 
   private spawnEnemy(): void {
-    // Deeper into the sortie, some bandits come from behind and overtake you.
-    const fromBehind = this.now - this.startedAt > 45000 && Math.random() < 0.35;
-    const { group, prop } = makeBiplane(P.enemyBody, P.enemyWing, 0xeed8d4);
-    const alt = 6 + Math.random() * 30;
+    const roll = Math.random();
+    const kind: EnemyKind =
+      roll < 0.45 ? 'bi' : roll < 0.65 ? 'mono' : roll < 0.85 ? 'tri' : 'blimp';
+    const info = ENEMY_INFO[kind];
+
+    // Deeper into the sortie, some fighters come from behind and overtake you.
+    const fromBehind =
+      kind !== 'blimp' && this.now - this.startedAt > 45000 && Math.random() < 0.35;
+
+    const { group, prop } =
+      kind === 'blimp'
+        ? makeBlimp()
+        : makePlane(info.shape as PlaneType, info.body, info.wing, 0xeed8d4);
+
+    const alt = kind === 'blimp' ? 22 + Math.random() * 12 : 6 + Math.random() * 30;
     if (fromBehind) {
       group.rotation.y = 0; // flying away from the camera, faster than you
       group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, 70);
     } else {
-      group.rotation.y = Math.PI; // flying toward the player
+      group.rotation.y = Math.PI; // heading toward the player
       group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, -480);
     }
     this.scene.add(group);
+
+    const speed =
+      kind === 'blimp' ? 8 + Math.random() * 8 :
+      kind === 'mono' ? 55 + Math.random() * 30 :
+      kind === 'tri' ? 30 + Math.random() * 30 :
+      35 + Math.random() * 40;
+
     this.enemies.push({
       group,
       prop,
+      kind,
       mode: fromBehind ? 'overtake' : 'attack',
       alt,
-      speed: fromBehind
-        ? -(WORLD_SPEED * 0.35) - (45 + Math.random() * 30)
-        : 35 + Math.random() * 40,
+      speed: fromBehind ? -(WORLD_SPEED * 0.35) - (45 + Math.random() * 30) : speed,
       wobble: Math.random() * Math.PI * 2,
-      hp: 2,
+      hp: info.hp,
       fireAt: this.now + 1000 + Math.random() * 1500,
     });
   }
@@ -700,24 +739,27 @@ export class Game {
         e.group.rotation.y = Math.PI;
       }
 
+      const blimp = e.kind === 'blimp';
+
       // Pursue the player at range, but commit to the attack line on final
-      // approach so head-on collisions stay dodgeable.
-      const pursuing = e.mode === 'attack' && pos.z < PLAYER_Z - 70 ? 1 : 0;
-      pos.x += (THREE.MathUtils.clamp(p.x - pos.x, -1, 1) * 9 * pursuing + Math.sin(e.wobble) * 3) * dt;
+      // approach so head-on collisions stay dodgeable. Blimps just drift.
+      const pursuing = !blimp && e.mode === 'attack' && pos.z < PLAYER_Z - 70 ? 1 : 0;
+      pos.x += (THREE.MathUtils.clamp(p.x - pos.x, -1, 1) * 9 * pursuing + Math.sin(e.wobble) * (blimp ? 0.6 : 3)) * dt;
       e.alt += THREE.MathUtils.clamp(p.y - e.alt, -1, 1) * 2.4 * pursuing * dt;
       pos.y = e.alt;
-      e.group.rotation.z = Math.sin(e.wobble) * 0.15;
+      e.group.rotation.z = Math.sin(e.wobble) * (blimp ? 0.03 : 0.15);
 
-      // Fire when in the approach window.
+      // Fire when in the approach window; blimp gondolas lob slow flak.
       if (e.mode === 'attack' && this.now > e.fireAt && pos.z > -300 && pos.z < PLAYER_Z - 10) {
-        e.fireAt = this.now + 1500 + Math.random() * 1400;
-        const dir = new THREE.Vector3().subVectors(p, pos).normalize().multiplyScalar(85);
-        this.spawnBullet(pos.clone(), dir, true);
+        e.fireAt = this.now + (blimp ? 2600 + Math.random() * 1600 : 1500 + Math.random() * 1400);
+        const muzzle = blimp ? pos.clone().setY(pos.y - 3.5) : pos.clone();
+        const dir = new THREE.Vector3().subVectors(p, muzzle).normalize().multiplyScalar(blimp ? 60 : 85);
+        this.spawnBullet(muzzle, dir, true, blimp ? P.flak : undefined);
       }
 
       // Mid-air collision.
-      if (pos.distanceTo(p) < 4.2) {
-        this.explode(pos, 16);
+      if (pos.distanceTo(p) < ENEMY_INFO[e.kind].hitR) {
+        this.explode(pos, blimp ? 40 : 16);
         this.removeEnemy(i);
         this.playerHit(false);
         continue;
@@ -816,11 +858,18 @@ export class Game {
       } else if (!dead) {
         for (let j = this.enemies.length - 1; j >= 0; j--) {
           const e = this.enemies[j];
-          if (pos.distanceTo(e.group.position) < 4.2) {
+          const info = ENEMY_INFO[e.kind];
+          if (pos.distanceTo(e.group.position) < info.hitR) {
             dead = true;
             if (--e.hp <= 0) {
-              this.explode(e.group.position, 18);
-              this.score += 100;
+              const epos = e.group.position;
+              this.explode(epos, e.kind === 'blimp' ? 44 : 18);
+              if (e.kind === 'blimp') {
+                // A burning airship goes up along its whole length.
+                this.explode(epos.clone().add(new THREE.Vector3(0, 1, -6)), 18);
+                this.explode(epos.clone().add(new THREE.Vector3(0, -1, 6)), 18);
+              }
+              this.score += info.score;
               this.removeEnemy(j);
             } else {
               this.explode(pos, 4);

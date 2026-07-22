@@ -12,11 +12,17 @@ models are built procedurally from primitives (zero external assets).
 Pick your airframe on the title screen — the choice is remembered between visits,
 and each handles differently:
 
-| Airframe | Handling |
-|----------|----------|
-| Monoplane | Fastest steering, sluggish climb, dives hard |
-| Biplane | The balanced classic |
-| Triplane | Superb climb, slow steering |
+| Airframe | Year | Character |
+|----------|------|-----------|
+| Fokker Eindecker | 1915 | Fastest steering, weak climb, dives hard |
+| Sopwith Camel | 1917 | Balanced and agile |
+| Fokker Dr.I | 1917 | Superb climb, slow steering |
+| Albatros D.III | 1917 | Quick guns (125 ms), light bomb load (24) |
+| P-40 Flying Tiger | 1941 | Best all-round: fast guns, 36 bombs, shark mouth |
+
+Enemy air traffic is mixed too: biplanes (100 pts), fast monoplanes (120 pts),
+tough triplanes (150 pts), and huge slow **zeppelins** (300 pts, 7 hits) that lob
+flak from their gondolas and go up in a chain of fireballs.
 
 Fly your biplane over scrolling low-poly farmland. Bomb buildings and AA guns,
 dogfight enemy planes at matching altitude, and manage your fuel — line up with a
@@ -57,9 +63,12 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
 
 | Target | Points |
 |--------|--------|
+| Zeppelin | 300 |
+| Enemy triplane | 150 |
 | Bridge | 150 |
 | Factory | 125 |
-| Enemy plane | 100 |
+| Enemy monoplane | 120 |
+| Enemy biplane | 100 |
 | Tank (mobile, fires back) | 100 |
 | Ship (river barge) | 100 |
 | Fuel depot | 100 |

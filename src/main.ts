@@ -21,9 +21,11 @@ const overEl = $('gameover');
 const hudEl = $('hud');
 
 // ---------------------------------------------------------------- plane selection
-let selectedPlane: PlaneType =
-  (localStorage.getItem('bluemax-plane') as PlaneType) || 'bi';
-if (!['mono', 'bi', 'tri'].includes(selectedPlane)) selectedPlane = 'bi';
+const LEGACY_PLANES: Record<string, PlaneType> = { mono: 'eindecker', bi: 'camel', tri: 'dr1' };
+const PLANE_IDS = ['eindecker', 'camel', 'dr1', 'albatros', 'p40'];
+let stored = localStorage.getItem('bluemax-plane') ?? 'camel';
+stored = LEGACY_PLANES[stored] ?? stored;
+let selectedPlane: PlaneType = PLANE_IDS.includes(stored) ? (stored as PlaneType) : 'camel';
 
 const planeCards = Array.from(document.querySelectorAll<HTMLElement>('.plane-card'));
 function refreshPlaneCards(): void {
