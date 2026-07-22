@@ -1,6 +1,6 @@
 /**
- * High-score table. Stored locally today; the same entry shape is designed to
- * post to a remote leaderboard endpoint when one is configured.
+ * High-score table: always kept locally, and mirrored to a shared Supabase
+ * leaderboard when the project credentials below are filled in.
  */
 export interface ScoreEntry {
   name: string;
@@ -12,8 +12,50 @@ export interface ScoreEntry {
 const KEY = 'bluemax-highscores';
 const MAX_ENTRIES = 10;
 
-/** Set to a leaderboard API base URL to enable server-side scores. */
-export const REMOTE_URL: string | null = null;
+// ---------------------------------------------------------------- Supabase
+// Fill these in to enable the shared global leaderboard. The anon key is a
+// public client key by design (it ships in the bundle); row-level security
+// on the server is what protects the data.
+export const SUPABASE_URL = 'https://smytnwaqgbkqugtfcocu.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_ckkD7aerv9Ak2xnh5xLabA_7RKSt_ty';
+
+export const remoteEnabled = (): boolean =>
+  SUPABASE_URL.length > 0 && SUPABASE_ANON_KEY.length > 0;
+
+const sbHeaders = (): Record<string, string> => ({
+  apikey: SUPABASE_ANON_KEY,
+  Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+  'Content-Type': 'application/json',
+});
+
+/** Global top scores from the shared leaderboard, or null when unavailable. */
+export async function fetchGlobalScores(limit = 10): Promise<ScoreEntry[] | null> {
+  if (!remoteEnabled()) return null;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/scores?select=name,score,plane,date&order=score.desc&limit=${limit}`,
+      { headers: sbHeaders() },
+    );
+    if (!res.ok) return null;
+    return (await res.json()) as ScoreEntry[];
+  } catch {
+    return null;
+  }
+}
+
+async function submitRemote(entry: ScoreEntry): Promise<void> {
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/scores`, {
+      method: 'POST',
+      headers: { ...sbHeaders(), Prefer: 'return=minimal' },
+      body: JSON.stringify(entry),
+    });
+  } catch {
+    // Offline or endpoint down — the local table still has the score.
+  }
+}
+
+// ---------------------------------------------------------------- local
 
 export function loadScores(): ScoreEntry[] {
   try {
@@ -35,22 +77,10 @@ export function addScore(entry: ScoreEntry): ScoreEntry[] {
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_ENTRIES);
   localStorage.setItem(KEY, JSON.stringify(scores));
-  if (REMOTE_URL) void submitRemote(entry);
+  if (remoteEnabled()) void submitRemote(entry);
   return scores;
 }
 
 export function best(): number {
   return loadScores()[0]?.score ?? 0;
-}
-
-async function submitRemote(entry: ScoreEntry): Promise<void> {
-  try {
-    await fetch(`${REMOTE_URL}/scores`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(entry),
-    });
-  } catch {
-    // Offline or endpoint down — the local table still has the score.
-  }
 }

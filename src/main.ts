@@ -1,6 +1,9 @@
 import { Game, type Hud } from './game';
 import { PLANES, PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
-import { loadScores, addScore, qualifies, best, type ScoreEntry } from './highscores';
+import {
+  loadScores, addScore, qualifies, best, fetchGlobalScores, remoteEnabled,
+  type ScoreEntry,
+} from './highscores';
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -89,12 +92,12 @@ let pendingScore: number | null = null;
 const hsEntry = $('hsEntry');
 const hsName = $('hsName') as HTMLInputElement;
 
-function renderScores(highlight: ScoreEntry | null): void {
+function renderList(entries: ScoreEntry[], highlight: ScoreEntry | null): void {
   const list = $('hsList');
   list.innerHTML = '';
-  for (const [i, s] of loadScores().slice(0, 5).entries()) {
+  for (const [i, s] of entries.slice(0, 5).entries()) {
     const li = document.createElement('li');
-    if (highlight && s.name === highlight.name && s.score === highlight.score && s.date === highlight.date) {
+    if (highlight && s.name === highlight.name && s.score === highlight.score) {
       li.className = 'latest';
     }
     const name = document.createElement('span');
@@ -105,6 +108,17 @@ function renderScores(highlight: ScoreEntry | null): void {
     score.textContent = s.score.toLocaleString();
     li.append(name, score);
     list.appendChild(li);
+  }
+}
+
+function renderScores(highlight: ScoreEntry | null): void {
+  // Local table shows instantly; the shared leaderboard replaces it when it answers.
+  $('hsHeading').textContent = remoteEnabled() ? 'GLOBAL TOP 5' : 'TOP 5';
+  renderList(loadScores(), highlight);
+  if (remoteEnabled()) {
+    void fetchGlobalScores().then((global) => {
+      if (global && global.length) renderList(global, highlight);
+    });
   }
 }
 
@@ -129,6 +143,8 @@ function saveHighScore(): void {
   hsName.blur();
   renderScores(entry);
   updateBest();
+  // Give the remote submit a moment to land, then refresh the global board.
+  if (remoteEnabled()) setTimeout(() => renderScores(entry), 900);
 }
 
 $('hsSave').addEventListener('click', saveHighScore);
