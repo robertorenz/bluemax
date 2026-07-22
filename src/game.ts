@@ -405,7 +405,7 @@ export class Game {
     if (this.mode === 'takeoff') {
       this.alt += 10 * dt;
       p.y = this.alt;
-      this.player.rotation.x = THREE.MathUtils.lerp(this.player.rotation.x, -0.24, 0.1);
+      this.player.rotation.x = THREE.MathUtils.lerp(this.player.rotation.x, 0.24, 0.1);
       if (this.alt >= 12) {
         this.mode = 'flying';
         this.activeRunway = null;
@@ -426,10 +426,10 @@ export class Game {
     }
     if (this.keys.has('ArrowUp')) {
       this.alt = Math.min(MAX_ALT, this.alt + stats.climb * dt);
-      pitch = -0.28;
+      pitch = 0.28; // nose up
     } else if (this.keys.has('ArrowDown')) {
       this.alt -= stats.dive * dt;
-      pitch = 0.3;
+      pitch = -0.3; // nose down
     }
 
     p.x = THREE.MathUtils.clamp(p.x, -LATERAL_RANGE, LATERAL_RANGE);
