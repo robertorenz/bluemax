@@ -3,10 +3,12 @@ import { Game, type Hud } from './game';
 import {
   makePlane, ENEMY_FORMS, makeBlimp, makeBridge, makeFactory, makeTank,
   makeShip, makeDepot, makeAAGun, makeCar, makeBuilding, makeCastle, makeWindmill,
+  makeBalloon, makeEnemyBomber, makeLocomotive, makeTrainCar, makeWarship,
+  makeHangar, makeLighthouse, makeControlTower,
 } from './models';
 import { PLANES, PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
 import {
-  loadScores, addScore, qualifies, best, fetchGlobalScores, remoteEnabled,
+  loadScores, addScore, qualifies, best, fetchGlobalScores, fetchRank, remoteEnabled,
   type ScoreEntry,
 } from './highscores';
 
@@ -83,8 +85,13 @@ const planeThumbs = makePlaneThumbs();
 
 /** Every scoreable target, best first, with a builder for its 3D thumbnail. */
 const SCORE_TABLE: { label: string; pts: number; build: () => THREE.Object3D }[] = [
+  { label: 'Enemy Ace', pts: 500, build: () => makePlane(ENEMY_FORMS.tri, 0x8c1f1f, 0x1f1f22, 0xeed8d4).group },
   { label: 'Castle', pts: 400, build: makeCastle },
+  { label: 'Bomber', pts: 350, build: () => makeEnemyBomber().group },
   { label: 'Zeppelin', pts: 300, build: () => makeBlimp().group },
+  { label: 'Warship', pts: 250, build: makeWarship },
+  { label: 'Balloon', pts: 250, build: () => makeBalloon().group },
+  { label: 'Locomotive', pts: 200, build: makeLocomotive },
   { label: 'Enemy Triplane', pts: 150, build: () => makePlane(ENEMY_FORMS.tri, 0x9c3b34, 0xd0685c, 0xeed8d4).group },
   { label: 'Bridge', pts: 150, build: makeBridge },
   { label: 'Factory', pts: 125, build: makeFactory },
@@ -94,6 +101,11 @@ const SCORE_TABLE: { label: string; pts: number; build: () => THREE.Object3D }[]
   { label: 'Windmill', pts: 100, build: () => makeWindmill().group },
   { label: 'River Barge', pts: 100, build: makeShip },
   { label: 'Fuel Depot', pts: 100, build: makeDepot },
+  { label: 'Hangar', pts: 150, build: makeHangar },
+  { label: 'Lighthouse', pts: 150, build: makeLighthouse },
+  { label: 'Control Tower', pts: 150, build: makeControlTower },
+  { label: 'Parked Plane', pts: 120, build: () => makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4).group },
+  { label: 'Train Car', pts: 80, build: makeTrainCar },
   { label: 'AA Gun', pts: 75, build: () => makeAAGun().group },
   { label: 'Truck', pts: 60, build: makeCar },
   { label: 'Building', pts: 50, build: makeBuilding },
@@ -255,6 +267,9 @@ function saveHighScore(): void {
   hsName.blur();
   renderScores(entry);
   updateBest();
+  void fetchRank(entry.score).then((r) => {
+    if (r) $('hsRank').textContent = `YOUR GLOBAL RANK: #${r.rank} OF ${r.total}`;
+  });
   // Give the remote submit a moment to land, then refresh the global board.
   if (remoteEnabled()) setTimeout(() => renderScores(entry), 900);
 }
@@ -266,6 +281,30 @@ hsName.addEventListener('keydown', (e) => {
     saveHighScore();
   }
 });
+
+// ---------------------------------------------------------------- achievements
+
+const earnedAchv = new Set<string>(
+  JSON.parse(localStorage.getItem('bluemax-achv') ?? '[]') as string[],
+);
+
+function toast(text: string): void {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = text;
+  $('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 5200);
+}
+
+game.onAchievement = (id, label, bonus) => {
+  if (earnedAchv.has(id)) return;
+  earnedAchv.add(id);
+  localStorage.setItem('bluemax-achv', JSON.stringify([...earnedAchv]));
+  careerXp += bonus;
+  localStorage.setItem('bluemax-xp', String(careerXp));
+  rebuildPlaneCards();
+  toast(`🏆 ${label}  +${bonus.toLocaleString()} XP`);
+};
 
 // ---------------------------------------------------------------- game flow
 
@@ -282,6 +321,7 @@ function startGame(): void {
 game.onGameOver = (reason, score) => {
   $('overReason').textContent = reason;
   $('finalScore').textContent = score.toLocaleString();
+  $('hsRank').textContent = '';
 
   // Career XP accumulates across every sortie; new planes may unlock.
   const prevXp = careerXp;

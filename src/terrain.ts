@@ -8,7 +8,9 @@ const COLS = 18;
 const ROWS = 8;
 
 /** Landscape regions the world drifts between as you fly. */
-export type Biome = 'farmland' | 'forest' | 'meadow' | 'steppe' | 'alpine';
+export type Biome = 'farmland' | 'forest' | 'meadow' | 'steppe' | 'alpine' | 'coast';
+
+const SEAS = [0x2f5a86, 0x35648f, 0x2a5480];
 
 const FIELD_GREENS = [0x6a8f4a, 0x7ba05b, 0x55803f, 0x91a05e, 0x4c6b3a];
 const FOREST_FLOOR = [0x3f5c33, 0x46653a, 0x3a5530, 0x4c6b3f];
@@ -73,7 +75,16 @@ export function makeChunk(biome: Biome = 'farmland'): THREE.Group {
       const Dx = gx[r + 1][col], Dz = gz[r + 1][col];
       const roll = Math.random();
 
-      if (biome === 'farmland' && roll < 0.2) {
+      if (biome === 'coast') {
+        // Sea to the west, a sandy shore, farmland to the east.
+        const cellMidX = (Ax + Bx + Cx + Dx) / 4;
+        const shore = -60 + Math.sin((r + 1) * 1.7) * 16;
+        const color =
+          cellMidX < shore - 12 ? SEAS[Math.floor(Math.random() * SEAS.length)] :
+          cellMidX < shore + 8 ? 0xc9b382 :
+          FIELD_GREENS[Math.floor(Math.random() * FIELD_GREENS.length)];
+        quad(Ax, Az, Bx, Bz, Cx, Cz, Dx, Dz, color);
+      } else if (biome === 'farmland' && roll < 0.2) {
         // Strip farming: narrow medieval bands across the plot.
         const n = 4 + Math.floor(Math.random() * 3);
         for (let i = 0; i < n; i++) {
@@ -150,7 +161,8 @@ export function makeChunk(biome: Biome = 'farmland'): THREE.Group {
     7 + Math.floor(Math.random() * 5);
   for (let i = 0; i < treeCount; i++) {
     const tree = makeTree();
-    const side = Math.random() < 0.5 ? -1 : 1;
+    // On the coast everything living stays on the landward (east) side.
+    const side = biome === 'coast' ? 1 : Math.random() < 0.5 ? -1 : 1;
     const minX = biome === 'forest' ? 32 : 48;
     tree.position.set(
       side * (minX + Math.random() * (CHUNK_W / 2 - minX - 20)),
@@ -164,10 +176,11 @@ export function makeChunk(biome: Biome = 'farmland'): THREE.Group {
   const herdCount =
     biome === 'meadow' ? 3 + Math.floor(Math.random() * 2) :
     biome === 'farmland' ? 2 + Math.floor(Math.random() * 2) :
+    biome === 'coast' ? 1 :
     biome === 'steppe' ? 1 + Math.floor(Math.random() * 2) : 0;
   for (let h = 0; h < herdCount; h++) {
     const sheep = Math.random() < 0.45;
-    const side = Math.random() < 0.5 ? -1 : 1;
+    const side = biome === 'coast' ? 1 : Math.random() < 0.5 ? -1 : 1;
     const hx = side * (30 + Math.random() * 240);
     const hz = -CHUNK_D / 2 + 20 + Math.random() * (CHUNK_D - 40);
     const animals = 3 + Math.floor(Math.random() * 5);

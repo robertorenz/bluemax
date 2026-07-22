@@ -43,6 +43,25 @@ export async function fetchGlobalScores(limit = 10): Promise<ScoreEntry[] | null
   }
 }
 
+/** Global standing for a score: how many players beat it, out of how many. */
+export async function fetchRank(score: number): Promise<{ rank: number; total: number } | null> {
+  if (!remoteEnabled()) return null;
+  try {
+    const count = async (filter: string): Promise<number> => {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/scores?select=id${filter}`, {
+        headers: { ...sbHeaders(), Prefer: 'count=exact', Range: '0-0' },
+      });
+      return Number(res.headers.get('content-range')?.split('/')[1] ?? NaN);
+    };
+    const above = await count(`&score=gt.${score}`);
+    const total = await count('');
+    if (Number.isNaN(above) || Number.isNaN(total)) return null;
+    return { rank: above + 1, total };
+  } catch {
+    return null;
+  }
+}
+
 async function submitRemote(entry: ScoreEntry): Promise<void> {
   try {
     await fetch(`${SUPABASE_URL}/rest/v1/scores`, {

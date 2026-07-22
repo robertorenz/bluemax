@@ -6,6 +6,8 @@ import {
   makeCloud, makeBirdFlock, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
   makeCottage, makeChurch, makeCastle, makeHill, makeRollingHill, makeWindmill, makeCanyon, makeLake,
+  makeRailway, makeLocomotive, makeTrainCar, makeBalloon, makeEnemyBomber,
+  makeHangar, makeControlTower, makeLighthouse, makeWarship, makeSearchBeam,
   canyonTaper, CANYON_WIDTH, CANYON_WALL_H,
   riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneShape,
@@ -14,26 +16,48 @@ import { PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
 
 export type { PlaneType };
 
-type EnemyKind = 'bi' | 'mono' | 'tri' | 'blimp';
+type EnemyKind = 'bi' | 'mono' | 'tri' | 'blimp' | 'balloon' | 'bomber';
 
 const ENEMY_INFO: Record<EnemyKind, {
   hp: number; score: number; hitR: number;
-  shape: PlaneShape | 'blimp';
+  shape: PlaneShape | 'blimp' | 'balloon' | 'bomber';
   body: number; wing: number;
 }> = {
-  bi:    { hp: 2, score: 100, hitR: 4.2, shape: 'bi',    body: 0x8c4a45, wing: 0xc47a6e },
-  mono:  { hp: 1, score: 120, hitR: 4.2, shape: 'mono',  body: 0x5a5f66, wing: 0x7d838c },
-  tri:   { hp: 3, score: 150, hitR: 4.2, shape: 'tri',   body: 0x9c3b34, wing: 0xd0685c },
-  blimp: { hp: 7, score: 300, hitR: 10,  shape: 'blimp', body: 0, wing: 0 },
+  bi:      { hp: 2, score: 100, hitR: 4.2, shape: 'bi',      body: 0x8c4a45, wing: 0xc47a6e },
+  mono:    { hp: 1, score: 120, hitR: 4.2, shape: 'mono',    body: 0x5a5f66, wing: 0x7d838c },
+  tri:     { hp: 3, score: 150, hitR: 4.2, shape: 'tri',     body: 0x9c3b34, wing: 0xd0685c },
+  blimp:   { hp: 7, score: 300, hitR: 10,  shape: 'blimp',   body: 0, wing: 0 },
+  balloon: { hp: 4, score: 250, hitR: 6,   shape: 'balloon', body: 0, wing: 0 },
+  bomber:  { hp: 5, score: 350, hitR: 7,   shape: 'bomber',  body: 0, wing: 0 },
 };
+
+const ACE_NAMES = ['VON RICHTER', 'DER FALKE', 'HIMMELWOLF', 'ROTER BARON', 'EISENHAND'];
+
+const OBJECTIVE_POOL: { key: string; label: string; need: number; bonus: number }[] = [
+  { key: 'tank', label: 'TANKS', need: 3, bonus: 500 },
+  { key: 'building', label: 'BUILDINGS', need: 5, bonus: 400 },
+  { key: 'bridge', label: 'BRIDGES', need: 2, bonus: 600 },
+  { key: 'ship', label: 'BARGES', need: 2, bonus: 500 },
+  { key: 'factory', label: 'FACTORIES', need: 2, bonus: 500 },
+  { key: 'aagun', label: 'AA GUNS', need: 3, bonus: 450 },
+  { key: 'car', label: 'TRUCKS', need: 3, bonus: 400 },
+  { key: 'depot', label: 'FUEL DEPOTS', need: 2, bonus: 450 },
+  { key: 'windmill', label: 'WINDMILLS', need: 2, bonus: 450 },
+  { key: 'plane', label: 'ENEMY PLANES', need: 5, bonus: 600 },
+  { key: 'zeppelin', label: 'ZEPPELIN', need: 1, bonus: 700 },
+  { key: 'balloon', label: 'BALLOONS', need: 2, bonus: 600 },
+  { key: 'castle', label: 'CASTLE', need: 1, bonus: 800 },
+  { key: 'train', label: 'TRAIN CARS', need: 3, bonus: 600 },
+];
 import { makeChunk, CHUNK_D, CHUNK_COUNT, type Biome } from './terrain';
 
 const BIOMES: { biome: Biome; weight: number }[] = [
-  { biome: 'farmland', weight: 0.38 },
-  { biome: 'forest', weight: 0.2 },
-  { biome: 'steppe', weight: 0.16 },
-  { biome: 'meadow', weight: 0.14 },
-  { biome: 'alpine', weight: 0.12 },
+  { biome: 'farmland', weight: 0.32 },
+  { biome: 'forest', weight: 0.18 },
+  { biome: 'steppe', weight: 0.14 },
+  { biome: 'meadow', weight: 0.12 },
+  { biome: 'alpine', weight: 0.1 },
+  { biome: 'coast', weight: 0.14 },
 ];
 
 function disposeGroup(group: THREE.Group): void {
@@ -57,22 +81,28 @@ const GRAVITY = 25;
 interface AirEnemy {
   group: THREE.Group;
   prop: THREE.Mesh;
+  prop2?: THREE.Mesh;
   kind: EnemyKind;
   mode: 'attack' | 'overtake';
   alt: number;
   speed: number;
   wobble: number;
   hp: number;
+  hitR: number;
+  score: number;
+  ace?: string;
   fireAt: number;
 }
 
 type GroundKind =
   | 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot'
   | 'river' | 'bridge' | 'ship' | 'road' | 'car' | 'castle'
-  | 'hill' | 'windmill' | 'canyon' | 'lake';
+  | 'hill' | 'windmill' | 'canyon' | 'lake'
+  | 'rail' | 'train' | 'hangar' | 'tower' | 'parked' | 'lighthouse' | 'warship';
 
 /** Lane kinds share the long wandering-strip behavior. */
-const isLane = (k: GroundKind): boolean => k === 'river' || k === 'road' || k === 'canyon';
+const isLane = (k: GroundKind): boolean =>
+  k === 'river' || k === 'road' || k === 'canyon' || k === 'rail';
 
 interface GroundObj {
   group: THREE.Group;
@@ -88,6 +118,10 @@ interface GroundObj {
   hillH?: number;
   hillRz?: number;
   hillShape?: 'cone' | 'dome';
+  loco?: boolean;
+  scoreOverride?: number;
+  beam?: THREE.Group;
+  sweepSeed?: number;
   damaged?: boolean;
   dead?: boolean;
   nextSmokeAt?: number;
@@ -104,6 +138,12 @@ const STRUCT_HIT: Partial<Record<GroundKind, { r: number; h: number }>> = {
   car:      { r: 2.2, h: 2.4 },
   castle:   { r: 12, h: 11 },
   windmill: { r: 2.6, h: 11.5 },
+  train:    { r: 2.4, h: 3.6 },
+  hangar:   { r: 5.5, h: 6.5 },
+  tower:    { r: 2.4, h: 8.5 },
+  parked:   { r: 3, h: 3 },
+  lighthouse: { r: 2.2, h: 13 },
+  warship:  { r: 4.5, h: 5.5 },
 };
 
 const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: number }> = {
@@ -117,9 +157,16 @@ const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: numb
   car:      { hp: 1, score: 60, radius: 12 },
   castle:   { hp: 4, score: 400, radius: 22 },
   windmill: { hp: 1, score: 100, radius: 14 },
+  train:    { hp: 1, score: 80, radius: 12 },
+  hangar:   { hp: 2, score: 150, radius: 16 },
+  tower:    { hp: 2, score: 150, radius: 14 },
+  parked:   { hp: 1, score: 120, radius: 12 },
+  lighthouse: { hp: 2, score: 150, radius: 14 },
+  warship:  { hp: 3, score: 250, radius: 16 },
   hill:     { hp: 99, score: 0, radius: 0 },
   lake:     { hp: 99, score: 0, radius: 0 },
   canyon:   { hp: 99, score: 0, radius: 0 },
+  rail:     { hp: 99, score: 0, radius: 0 },
   river:    { hp: 99, score: 0, radius: 0 },
   road:     { hp: 99, score: 0, radius: 0 },
   runway:   { hp: 99, score: 0, radius: 0 },
@@ -231,7 +278,31 @@ export class Game {
   private nextHillsAt = 0;
   private nextCanyonAt = 0;
   private nextLakeAt = 0;
+  private nextRailAt = 0;
+  private nextFormationAt = 0;
+  private nextAceAt = 0;
+  private nextAirfieldAt = 0;
+  private nextCoastAt = 0;
   private startedAt = 0;
+
+  // Day/night cycle (0..1 dayness), photo mode, objectives, achievements.
+  private dayPhase = 0;
+  private dayness = 1;
+  private lastSkyD = -1;
+  private lastDusk = -1;
+  private photo = false;
+  private photoYaw = 0.6;
+  private photoPitch = 0.45;
+  private photoDist = 55;
+  private alertTimer = 0;
+  private objective: { key: string; label: string; need: number; have: number; bonus: number } | null = null;
+  private sortieKills = 0;
+  private trainKills = 0;
+  private balloonKills = 0;
+  private canyonLow = 0;
+  private lastHitAt = 0;
+  private achFired = new Set<string>();
+  onAchievement: (id: string, label: string, bonus: number) => void = () => {};
 
   constructor(container: HTMLElement, private hud: Hud) {
     const W = container.clientWidth || window.innerWidth;
@@ -273,18 +344,24 @@ export class Game {
     this.paintSky(0);
   }
 
-  /** Repaint the sky gradient blended toward storm colors by w (0..1). */
-  private paintSky(w: number): void {
-    const mix = (a: string, b: string): string =>
-      '#' + new THREE.Color(a).lerp(new THREE.Color(b), w).getHexString();
+  /** Repaint the sky blended by storm (w), daylight (d), and dusk warmth. */
+  private paintSky(w: number, d = 1, dusk = 0): void {
+    const night = new THREE.Color('#101a26');
+    const mix = (day: string, storm: string): THREE.Color =>
+      new THREE.Color(day).lerp(new THREE.Color(storm), w).lerp(night, 1 - d);
+    const top = mix(P.skyTop, '#38434f');
+    const mid = mix(P.skyMid, '#5a6570').lerp(new THREE.Color('#b06a4a'), dusk * 0.3);
+    const hor = mix(P.horizon, '#727d87').lerp(new THREE.Color('#e8935a'), dusk * 0.6);
     const grad = this.skyCtx.createLinearGradient(0, 0, 0, 512);
-    grad.addColorStop(0, mix(P.skyTop, '#38434f'));
-    grad.addColorStop(0.55, mix(P.skyMid, '#5a6570'));
-    grad.addColorStop(1, mix(P.horizon, '#727d87'));
+    grad.addColorStop(0, '#' + top.getHexString());
+    grad.addColorStop(0.55, '#' + mid.getHexString());
+    grad.addColorStop(1, '#' + hor.getHexString());
     this.skyCtx.fillStyle = grad;
     this.skyCtx.fillRect(0, 0, 2, 512);
     this.skyTex.needsUpdate = true;
     this.lastSkyW = w;
+    this.lastSkyD = d;
+    this.lastDusk = dusk;
   }
 
   private buildLights(): void {
@@ -383,16 +460,35 @@ export class Game {
     }
     this.lightningBoost = THREE.MathUtils.damp(this.lightningBoost, 0, 9, dt);
 
-    this.sun.intensity = THREE.MathUtils.lerp(1.7, 0.55, w) + this.lightningBoost * 0.9;
-    this.hemi.intensity = THREE.MathUtils.lerp(0.95, 0.55, w) + this.lightningBoost * 1.3;
+    // Day/night cycle: ~2min day, dusk, ~2min night, dawn (5-minute loop).
+    this.dayPhase += (dt * Math.PI * 2) / 300;
+    const cyc = (this.dayPhase / (Math.PI * 2)) % 1;
+    const d =
+      cyc < 0.4 ? 1 :
+      cyc < 0.5 ? 1 - (cyc - 0.4) * 10 :
+      cyc < 0.9 ? 0 : (cyc - 0.9) * 10;
+    const dusk = (cyc >= 0.4 && cyc < 0.5) || cyc >= 0.9 ? 1 - Math.abs(2 * d - 1) : 0;
+    this.dayness = d;
+
+    this.sun.intensity =
+      THREE.MathUtils.lerp(1.7, 0.55, w) * THREE.MathUtils.lerp(0.14, 1, d) + this.lightningBoost * 0.9;
+    this.hemi.intensity =
+      THREE.MathUtils.lerp(0.95, 0.55, w) * THREE.MathUtils.lerp(0.32, 1, d) + this.lightningBoost * 1.3;
+    this.sun.color.set(0xfff2dd).lerp(new THREE.Color(0xff9a5a), dusk * 0.7);
     const fog = this.scene.fog as THREE.Fog;
-    fog.color.set(P.fog).lerp(new THREE.Color(0x6b7683), w);
+    fog.color.set(P.fog).lerp(new THREE.Color(0x6b7683), w).lerp(new THREE.Color(0x18222e), 1 - d);
     fog.near = THREE.MathUtils.lerp(260, 170, w);
     fog.far = THREE.MathUtils.lerp(640, 430, w);
     for (const m of this.cloudMats) {
-      m.color.set(0xffffff).lerp(new THREE.Color(0x4b525c), w);
+      m.color.set(0xffffff).lerp(new THREE.Color(0x4b525c), w).lerp(new THREE.Color(0x2a3340), (1 - d) * 0.8);
     }
-    if (Math.abs(w - this.lastSkyW) > 0.02) this.paintSky(w);
+    if (
+      Math.abs(w - this.lastSkyW) > 0.02 ||
+      Math.abs(d - this.lastSkyD) > 0.02 ||
+      Math.abs(dusk - this.lastDusk) > 0.03
+    ) {
+      this.paintSky(w, d, dusk);
+    }
 
     // Rain streaks fade in past the overcast stage.
     const rainAmount = THREE.MathUtils.clamp((w - 0.6) / 0.4, 0, 1);
@@ -461,7 +557,69 @@ export class Game {
     window.addEventListener('keydown', (e) => {
       if (typing(e)) return;
       if (e.key.toLowerCase() === 'm' && !e.repeat) this.audio.toggleMute();
+      if (e.key.toLowerCase() === 'p' && !e.repeat && this.state === 'playing') this.togglePhoto();
     });
+  }
+
+  private togglePhoto(): void {
+    this.photo = !this.photo;
+    document.getElementById('hud')?.classList.toggle('hidden', this.photo);
+    document.getElementById('objective')?.classList.toggle('hidden', this.photo);
+    document.getElementById('touch')?.classList.add('hidden');
+    document.getElementById('photoHint')?.classList.toggle('hidden', !this.photo);
+    if (this.photo) this.audio.setEngine(0.1);
+  }
+
+  // ---------------------------------------------------------- objectives & feats
+
+  private showAlert(text: string): void {
+    const el = document.getElementById('alert');
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('hidden');
+    clearTimeout(this.alertTimer);
+    this.alertTimer = window.setTimeout(() => el.classList.add('hidden'), 3500);
+  }
+
+  private pickObjective(fresh = false): void {
+    const prev = this.objective?.key;
+    let pick = OBJECTIVE_POOL[Math.floor(Math.random() * OBJECTIVE_POOL.length)];
+    while (pick.key === prev) pick = OBJECTIVE_POOL[Math.floor(Math.random() * OBJECTIVE_POOL.length)];
+    this.objective = { ...pick, have: 0 };
+    this.updateObjectiveHud();
+    if (!fresh) this.showAlert(`🎯 NEW OBJECTIVE: DESTROY ${pick.need} ${pick.label}`);
+  }
+
+  private updateObjectiveHud(): void {
+    const el = document.getElementById('objective');
+    const ob = this.objective;
+    if (el && ob) el.textContent = `🎯 DESTROY ${ob.need} ${ob.label} (${ob.have}/${ob.need})`;
+  }
+
+  private registerKill(key: string): void {
+    this.sortieKills++;
+    if (this.sortieKills === 1) this.emitAchv('first-blood', 'First Blood', 250);
+    if (key === 'train' && ++this.trainKills >= 4) this.emitAchv('train-robber', 'Train Robber', 600);
+    if (key === 'balloon' && ++this.balloonKills >= 2) this.emitAchv('balloon-buster', 'Balloon Buster', 500);
+    if (key === 'zeppelin') this.emitAchv('zeppelin-down', 'Zeppelin Down', 500);
+    if (this.score >= 2000) this.emitAchv('high-roller', 'High Roller (2,000 in one sortie)', 500);
+    const ob = this.objective;
+    if (ob && key === ob.key) {
+      ob.have++;
+      if (ob.have >= ob.need) {
+        this.score += ob.bonus;
+        this.showAlert(`✔ OBJECTIVE COMPLETE  +${ob.bonus}`);
+        this.pickObjective();
+      } else {
+        this.updateObjectiveHud();
+      }
+    }
+  }
+
+  private emitAchv(id: string, label: string, bonus: number): void {
+    if (this.achFired.has(id)) return;
+    this.achFired.add(id);
+    this.onAchievement(id, label, bonus);
   }
 
   // ------------------------------------------------------------- lifecycle
@@ -498,7 +656,20 @@ export class Game {
     this.nextHillsAt = this.now + 14000;
     this.nextCanyonAt = this.now + 90000 + Math.random() * 30000;
     this.nextLakeAt = this.now + 9000;
+    this.nextRailAt = this.now + 55000;
+    this.nextFormationAt = this.now + 75000;
+    this.nextAceAt = this.now + 120000;
+    this.nextAirfieldAt = this.now + 90000;
+    this.nextCoastAt = this.now + 5000;
     this.startedAt = this.now;
+    this.lastHitAt = this.now;
+    this.sortieKills = 0;
+    this.trainKills = 0;
+    this.balloonKills = 0;
+    this.canyonLow = 0;
+    this.photo = false;
+    this.pickObjective(true);
+    document.getElementById('objective')?.classList.remove('hidden');
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
     this.mode = 'flying';
@@ -524,6 +695,28 @@ export class Game {
 
   update(dt: number, now: number): void {
     this.now = now;
+
+    // Photo mode: freeze the world, orbit the camera.
+    if (this.photo) {
+      const rot = 1.6 * dt;
+      if (this.keys.has('ArrowLeft')) this.photoYaw -= rot;
+      if (this.keys.has('ArrowRight')) this.photoYaw += rot;
+      if (this.keys.has('ArrowUp')) this.photoPitch = Math.min(1.4, this.photoPitch + rot);
+      if (this.keys.has('ArrowDown')) this.photoPitch = Math.max(0.05, this.photoPitch - rot);
+      if (this.keys.has('w')) this.photoDist = Math.max(14, this.photoDist - 45 * dt);
+      if (this.keys.has('s')) this.photoDist = Math.min(220, this.photoDist + 45 * dt);
+      const t = this.player.position;
+      this.camera.position.set(
+        t.x + Math.sin(this.photoYaw) * Math.cos(this.photoPitch) * this.photoDist,
+        t.y + Math.sin(this.photoPitch) * this.photoDist,
+        t.z + Math.cos(this.photoYaw) * Math.cos(this.photoPitch) * this.photoDist,
+      );
+      this.camera.up.set(0, 1, 0);
+      this.camera.lookAt(t);
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+
     this.playerProp.rotation.z += (30 + 20 * this.speedFactor) * dt;
     if (this.playerProp2) this.playerProp2.rotation.z -= (30 + 20 * this.speedFactor) * dt; // counter-rotating
 
@@ -548,6 +741,9 @@ export class Game {
     }
 
     if (this.state === 'playing') {
+      if (this.now - this.lastHitAt > 180000) {
+        this.emitAchv('untouchable', 'Untouchable (3 min unhit)', 600);
+      }
       this.updatePlayer(dt);
       this.updateFuel(dt);
       this.updateSpawns();
@@ -695,6 +891,9 @@ export class Game {
       if (o.kind === 'bridge' && !o.dead) {
         // The deck is solid, but a daring pilot can fly under it.
         hit = dz < 3.5 && dx < 15.5 && this.alt > 2.6 && this.alt < 5.4;
+        if (!hit && dz < 2.5 && dx < 15 && this.alt <= 2.6) {
+          this.emitAchv('limbo', 'Under the Bridge', 500);
+        }
       } else if (o.kind === 'hill') {
         // Terrain: height falls off from the summit; domes are round, peaks conical.
         const r = o.hillR ?? 10;
@@ -716,6 +915,11 @@ export class Game {
           const dxc = p.x - (pos.x + riverXAt(o.river, rel));
           hit = Math.abs(dxc) > CANYON_WIDTH / 2 - 2 && this.alt < wallH + 0.7;
           safeAlt = wallH + 6;
+          // Canyon running: distance covered inside the gorge, below the rims.
+          if (!hit && Math.abs(dxc) < CANYON_WIDTH / 2 - 2 && this.alt < 12 && wallH > 10) {
+            this.canyonLow += this.scroll * (1 / 60);
+            if (this.canyonLow > 600) this.emitAchv('canyon-runner', 'Canyon Runner', 600);
+          }
         }
       } else {
         const dims = STRUCT_HIT[o.kind];
@@ -744,6 +948,7 @@ export class Game {
   }
 
   private beginLanding(runway: GroundObj): void {
+    if (this.fuel < 10) this.emitAchv('dead-stick', 'Dead-Stick Landing', 500);
     this.mode = 'landing';
     this.activeRunway = runway;
     this.alt = 0.45;
@@ -775,11 +980,33 @@ export class Game {
         ? this.now + 15000 + Math.random() * 9000
         : this.now + 4000;
     }
-    // Canyons check first so rivers/roads don't monopolize the lane slot.
+    // Canyons and railways check first so rivers/roads don't monopolize the lane slot.
     if (this.now > this.nextCanyonAt) {
       this.nextCanyonAt = this.spawnCanyon()
         ? this.now + 90000 + Math.random() * 60000
         : this.now + 9000;
+    }
+    if (this.now > this.nextRailAt) {
+      this.nextRailAt = this.spawnRailway()
+        ? this.now + 80000 + Math.random() * 50000
+        : this.now + 8000;
+    }
+    if (this.now > this.nextFormationAt) {
+      this.spawnFormation();
+      this.nextFormationAt = this.now + 100000 + Math.random() * 60000;
+    }
+    if (this.now > this.nextAceAt) {
+      this.spawnAce();
+      this.nextAceAt = this.now + 150000 + Math.random() * 90000;
+    }
+    if (this.now > this.nextAirfieldAt) {
+      this.nextAirfieldAt = this.spawnAirfield()
+        ? this.now + 130000 + Math.random() * 80000
+        : this.now + 10000;
+    }
+    if (this.currentBiome === 'coast' && this.now > this.nextCoastAt) {
+      this.spawnCoastTarget();
+      this.nextCoastAt = this.now + 14000 + Math.random() * 12000;
     }
     if (this.now > this.nextRiverAt) {
       this.nextRiverAt = this.spawnRiver()
@@ -816,19 +1043,23 @@ export class Game {
   private spawnEnemy(): void {
     const roll = Math.random();
     const kind: EnemyKind =
-      roll < 0.45 ? 'bi' : roll < 0.65 ? 'mono' : roll < 0.85 ? 'tri' : 'blimp';
+      roll < 0.36 ? 'bi' : roll < 0.53 ? 'mono' : roll < 0.7 ? 'tri' : roll < 0.84 ? 'blimp' : 'balloon';
     const info = ENEMY_INFO[kind];
 
     // Deeper into the sortie, some fighters come from behind and overtake you.
     const fromBehind =
-      kind !== 'blimp' && this.now - this.startedAt > 45000 && Math.random() < 0.35;
+      kind !== 'blimp' && kind !== 'balloon' &&
+      this.now - this.startedAt > 45000 && Math.random() < 0.35;
 
     const { group, prop } =
-      kind === 'blimp'
-        ? makeBlimp()
-        : makePlane(ENEMY_FORMS[info.shape as PlaneShape], info.body, info.wing, 0xeed8d4);
+      kind === 'blimp' ? makeBlimp() :
+      kind === 'balloon' ? makeBalloon() :
+      makePlane(ENEMY_FORMS[info.shape as PlaneShape], info.body, info.wing, 0xeed8d4);
 
-    const alt = kind === 'blimp' ? 22 + Math.random() * 12 : 6 + Math.random() * 30;
+    const alt =
+      kind === 'blimp' ? 22 + Math.random() * 12 :
+      kind === 'balloon' ? 20 + Math.random() * 8 :
+      6 + Math.random() * 30;
     if (fromBehind) {
       group.rotation.y = 0; // flying away from the camera, faster than you
       group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, 70);
@@ -840,6 +1071,7 @@ export class Game {
 
     const speed =
       kind === 'blimp' ? 8 + Math.random() * 8 :
+      kind === 'balloon' ? 0 :
       kind === 'mono' ? 55 + Math.random() * 30 :
       kind === 'tri' ? 30 + Math.random() * 30 :
       35 + Math.random() * 40;
@@ -853,6 +1085,8 @@ export class Game {
       speed: fromBehind ? -(WORLD_SPEED * 0.35) - (45 + Math.random() * 30) : speed,
       wobble: Math.random() * Math.PI * 2,
       hp: info.hp,
+      hitR: info.hitR,
+      score: info.score,
       fireAt: this.now + 1000 + Math.random() * 1500,
     });
   }
@@ -887,10 +1121,18 @@ export class Game {
       group = model.group;
       barrel = model.barrel;
     }
+    let beam: THREE.Group | undefined;
+    if (kind === 'aagun') {
+      beam = makeSearchBeam();
+      beam.position.set(0, 2.5, 0);
+      beam.visible = false;
+      group.add(beam);
+    }
     group.position.set(x, 0, -500);
     this.scene.add(group);
     this.groundObjs.push({
-      group, kind, barrel, vx,
+      group, kind, barrel, vx, beam,
+      sweepSeed: Math.random() * 10,
       hp: GROUND_STATS[kind].hp,
       fireAt: this.now + 1500,
     });
@@ -935,6 +1177,142 @@ export class Game {
     this.scene.add(castle);
     this.groundObjs.push({ group: castle, kind: 'castle', hp: GROUND_STATS.castle.hp, fireAt: Infinity });
     return true;
+  }
+
+  /** Railway with a rolling train: a locomotive and 4-6 freight cars. */
+  private spawnRailway(): boolean {
+    if (this.laneBusy()) return false;
+    const params: RiverParams = {
+      amp: 14 + Math.random() * 12,
+      waveLen: 800 + Math.random() * 300,
+      phase: Math.random() * Math.PI * 2,
+      amp2: 4 + Math.random() * 4,
+      waveLen2: 200 + Math.random() * 100,
+      phase2: Math.random() * Math.PI * 2,
+      sideIn: Math.random() < 0.5 ? -1 : 1,
+      sideOut: Math.random() < 0.5 ? -1 : 1,
+    };
+    const baseX = (Math.random() - 0.5) * 26;
+    const group = makeRailway(params);
+    const centerZ = -500 - RIVER_LEN / 2;
+    group.position.set(baseX, 0, centerZ);
+    this.scene.add(group);
+    const rail: GroundObj = { group, kind: 'rail', hp: 99, fireAt: Infinity, river: params };
+    this.groundObjs.push(rail);
+
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const vz = dir * (13 + Math.random() * 6);
+    const startRel = -dir * (RIVER_LEN / 2 - 200);
+    const cars = 5 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < cars; i++) {
+      const rel = startRel - dir * 7.6 * i;
+      const car = i === 0 ? makeLocomotive() : makeTrainCar();
+      car.position.set(baseX + riverXAt(params, rel), 0, centerZ + rel);
+      this.scene.add(car);
+      this.groundObjs.push({
+        group: car, kind: 'train', host: rail, vz,
+        loco: i === 0,
+        hp: i === 0 ? 2 : 1,
+        scoreOverride: i === 0 ? 200 : undefined,
+        fireAt: Infinity,
+      });
+    }
+    return true;
+  }
+
+  /** Bomber formation: a heavy bomber with two fighter escorts. */
+  private spawnFormation(): void {
+    const alt = 18 + Math.random() * 10;
+    const cx = (Math.random() - 0.5) * 1.4 * LATERAL_RANGE;
+    const bomberModel = makeEnemyBomber();
+    bomberModel.group.rotation.y = Math.PI;
+    bomberModel.group.position.set(cx, alt, -480);
+    this.scene.add(bomberModel.group);
+    const info = ENEMY_INFO.bomber;
+    this.enemies.push({
+      group: bomberModel.group, prop: bomberModel.prop, prop2: bomberModel.prop2,
+      kind: 'bomber', mode: 'attack', alt,
+      speed: 22 + Math.random() * 8, wobble: Math.random() * 6,
+      hp: info.hp, hitR: info.hitR, score: info.score,
+      fireAt: this.now + 2000,
+    });
+    for (const side of [-1, 1]) {
+      const esc = makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4);
+      esc.group.rotation.y = Math.PI;
+      esc.group.position.set(cx + side * 13, alt + 2, -470);
+      this.scene.add(esc.group);
+      const bi = ENEMY_INFO.bi;
+      this.enemies.push({
+        group: esc.group, prop: esc.prop, kind: 'bi', mode: 'attack', alt: alt + 2,
+        speed: 26 + Math.random() * 8, wobble: Math.random() * 6,
+        hp: bi.hp, hitR: bi.hitR, score: bi.score,
+        fireAt: this.now + 1500 + Math.random() * 1000,
+      });
+    }
+    this.showAlert('⚠ BOMBER FORMATION SIGHTED');
+  }
+
+  /** A named enemy ace: tough, fast, aggressive. */
+  private spawnAce(): void {
+    const name = ACE_NAMES[Math.floor(Math.random() * ACE_NAMES.length)];
+    const model = makePlane(ENEMY_FORMS.tri, 0x8c1f1f, 0x1f1f22, 0xeed8d4);
+    model.group.rotation.y = Math.PI;
+    const alt = 10 + Math.random() * 20;
+    model.group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, -480);
+    this.scene.add(model.group);
+    this.enemies.push({
+      group: model.group, prop: model.prop, kind: 'tri', mode: 'attack', alt,
+      speed: 60 + Math.random() * 25, wobble: Math.random() * 6,
+      hp: 6, hitR: 4.2, score: 500, ace: name,
+      fireAt: this.now + 800,
+    });
+    this.showAlert(`⚠ ACE ATTACK: ${name}`);
+  }
+
+  /** Enemy airfield compound: hangars, tower, parked planes, and a guard gun. */
+  private spawnAirfield(): boolean {
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const bx = side * (28 + Math.random() * 12);
+    if (this.blocksRunwayLane('building', bx, 14)) return false;
+    const push = (group: THREE.Group, kind: GroundKind, dx: number, dz: number, extra?: Partial<GroundObj>): void => {
+      group.position.set(bx + dx, 0, -500 - dz);
+      this.scene.add(group);
+      this.groundObjs.push({
+        group, kind, hp: GROUND_STATS[kind].hp, fireAt: this.now + 1500, ...extra,
+      });
+    };
+    push(makeHangar(), 'hangar', -9, 8);
+    push(makeHangar(), 'hangar', 9, 26);
+    push(makeControlTower(), 'tower', -6, 48);
+    const parkedCount = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < parkedCount; i++) {
+      const plane = makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4).group;
+      plane.rotation.y = Math.random() * Math.PI * 2;
+      push(plane, 'parked', 6 + Math.random() * 6, 60 + i * 14);
+    }
+    const gun = makeAAGun();
+    const beam = makeSearchBeam();
+    beam.position.set(0, 2.5, 0);
+    beam.visible = false;
+    gun.group.add(beam);
+    push(gun.group, 'aagun', -side * 14, 40, { barrel: gun.barrel, beam, sweepSeed: Math.random() * 10 });
+    return true;
+  }
+
+  /** Coastal targets while flying the coast biome: warships at sea, lighthouses ashore. */
+  private spawnCoastTarget(): void {
+    if (Math.random() < 0.6) {
+      const ship = makeWarship();
+      ship.position.set(-(95 + Math.random() * 130), 0, -510);
+      ship.rotation.y = (Math.random() - 0.5) * 0.6;
+      this.scene.add(ship);
+      this.groundObjs.push({ group: ship, kind: 'warship', hp: GROUND_STATS.warship.hp, fireAt: Infinity });
+    } else {
+      const lh = makeLighthouse();
+      lh.position.set(-(46 + Math.random() * 14), 0, -510);
+      this.scene.add(lh);
+      this.groundObjs.push({ group: lh, kind: 'lighthouse', hp: GROUND_STATS.lighthouse.hp, fireAt: Infinity });
+    }
   }
 
   /** A pond or small lake off in the fields. */
@@ -1135,36 +1513,53 @@ export class Game {
       const pos = e.group.position;
       e.wobble += dt * 2.2;
       e.prop.rotation.z += 45 * dt;
-
-      pos.z += (this.scroll * 0.35 + e.speed) * dt;
-
-      // Overtakers race ahead, then swing around and join the attack.
-      if (e.mode === 'overtake' && pos.z < -350) {
-        e.mode = 'attack';
-        e.speed = 35 + Math.random() * 40;
-        e.group.rotation.y = Math.PI;
-      }
+      if (e.prop2) e.prop2.rotation.z -= 45 * dt;
 
       const blimp = e.kind === 'blimp';
+      const balloon = e.kind === 'balloon';
+      const bomber = e.kind === 'bomber';
 
-      // Pursue the player at range, but commit to the attack line on final
-      // approach so head-on collisions stay dodgeable. Blimps just drift.
-      const pursuing = !blimp && e.mode === 'attack' && pos.z < PLAYER_Z - 70 ? 1 : 0;
-      pos.x += (THREE.MathUtils.clamp(p.x - pos.x, -1, 1) * 9 * pursuing + Math.sin(e.wobble) * (blimp ? 0.6 : 3)) * dt;
-      e.alt += THREE.MathUtils.clamp(p.y - e.alt, -1, 1) * 2.4 * pursuing * dt;
-      pos.y = e.alt;
-      e.group.rotation.z = Math.sin(e.wobble) * (blimp ? 0.03 : 0.15);
+      if (balloon) {
+        // Tethered to the ground: moves with the world, just bobs.
+        pos.z += this.scroll * dt;
+        pos.y = e.alt + Math.sin(e.wobble * 0.5) * 0.5;
+      } else {
+        pos.z += (this.scroll * 0.35 + e.speed) * dt;
 
-      // Fire when in the approach window; blimp gondolas lob slow flak.
-      if (e.mode === 'attack' && this.now > e.fireAt && pos.z > -300 && pos.z < PLAYER_Z - 10) {
-        e.fireAt = this.now + (blimp ? 2600 + Math.random() * 1600 : 1500 + Math.random() * 1400);
-        const muzzle = blimp ? pos.clone().setY(pos.y - 3.5) : pos.clone();
-        const dir = new THREE.Vector3().subVectors(p, muzzle).normalize().multiplyScalar(blimp ? 60 : 85);
-        this.spawnBullet(muzzle, dir, true, blimp ? P.flak : undefined);
+        // Overtakers race ahead, then swing around and join the attack.
+        if (e.mode === 'overtake' && pos.z < -350) {
+          e.mode = 'attack';
+          e.speed = 35 + Math.random() * 40;
+          e.group.rotation.y = Math.PI;
+        }
+
+        // Pursue the player at range, but commit to the attack line on final
+        // approach so head-on collisions stay dodgeable. Aces press harder;
+        // blimps and bombers hold course.
+        const track = blimp || bomber ? 0 : e.ace ? 14 : 9;
+        const pursuing = track > 0 && e.mode === 'attack' && pos.z < PLAYER_Z - 70 ? 1 : 0;
+        pos.x += (THREE.MathUtils.clamp(p.x - pos.x, -1, 1) * track * pursuing +
+          Math.sin(e.wobble) * (blimp ? 0.6 : e.ace ? 6 : 3)) * dt;
+        e.alt += THREE.MathUtils.clamp(p.y - e.alt, -1, 1) * 2.4 * pursuing * dt;
+        pos.y = e.alt;
+        e.group.rotation.z = Math.sin(e.wobble) * (blimp ? 0.03 : 0.15);
+
+        // Fire when in the approach window.
+        if (e.mode === 'attack' && this.now > e.fireAt && pos.z > -300 && pos.z < PLAYER_Z - 10) {
+          e.fireAt = this.now + (
+            blimp || bomber ? 2600 + Math.random() * 1600 :
+            e.ace ? 900 + Math.random() * 500 :
+            1500 + Math.random() * 1400
+          );
+          const muzzle = blimp ? pos.clone().setY(pos.y - 3.5) : pos.clone();
+          const dir = new THREE.Vector3().subVectors(p, muzzle).normalize()
+            .multiplyScalar(blimp || bomber ? 65 : 85);
+          this.spawnBullet(muzzle, dir, true, blimp || bomber ? P.flak : undefined);
+        }
       }
 
       // Mid-air collision.
-      if (pos.distanceTo(p) < ENEMY_INFO[e.kind].hitR) {
+      if (pos.distanceTo(p) < e.hitR) {
         this.explode(pos, blimp ? 40 : 16);
         this.removeEnemy(i);
         this.playerHit(false);
@@ -1194,11 +1589,12 @@ export class Game {
         o.group.rotation.y = o.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
       }
 
-      // Barges and trucks follow their lane's course, turning back near its ends.
-      if ((o.kind === 'ship' || o.kind === 'car') && o.host?.river && o.vz && !o.damaged) {
+      // Barges, trucks, and trains follow their lane's course.
+      if ((o.kind === 'ship' || o.kind === 'car' || o.kind === 'train') && o.host?.river && o.vz && !o.damaged) {
         pos.z += o.vz * dt;
         const rel = pos.z - o.host.group.position.z;
-        if (Math.abs(rel) > RIVER_LEN / 2 - 130) o.vz = -o.vz;
+        // Trains run straight off the ends; boats and trucks turn back.
+        if (o.kind !== 'train' && Math.abs(rel) > RIVER_LEN / 2 - 130) o.vz = -o.vz;
         // Trucks keep to their side: right lane heads away, left lane comes toward you.
         const laneOffset = o.kind === 'car' ? (o.vz < 0 ? 2.4 : -2.4) : 0;
         pos.x = o.host.group.position.x + riverXAt(o.host.river, rel) + laneOffset;
@@ -1206,6 +1602,28 @@ export class Game {
         const dzs = o.vz > 0 ? 6 : -6;
         const dx = o.host.group.position.x + riverXAt(o.host.river, rel + dzs) + laneOffset - pos.x;
         o.group.rotation.y = Math.atan2(-dx, -dzs);
+      }
+
+      // The locomotive puffs coal smoke while running.
+      if (o.kind === 'train' && o.loco && !o.damaged && pos.z > -420 && this.now > (o.nextSmokeAt ?? 0)) {
+        o.nextSmokeAt = this.now + 260;
+        this.spawnSmoke(new THREE.Vector3(pos.x, 2.8, pos.z), 0.55);
+      }
+
+      // Night searchlights: sweep the sky, lock on when you come close.
+      if (o.kind === 'aagun' && o.beam) {
+        const night = this.dayness < 0.35;
+        o.beam.visible = night && !o.damaged;
+        if (o.beam.visible) {
+          const base = pos.clone().setY(2.5);
+          const toP = new THREE.Vector3().subVectors(p, base);
+          if (toP.length() < 240) {
+            o.beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), toP.normalize());
+          } else {
+            const t = this.now * 0.0006 + (o.sweepSeed ?? 0);
+            o.beam.rotation.set(Math.sin(t) * 0.38, 0, Math.cos(t * 0.8) * 0.38);
+          }
+        }
       }
 
       // Damaged or destroyed objects trail smoke instead of fighting back.
@@ -1229,7 +1647,10 @@ export class Game {
         const tank = o.kind === 'tank';
         const zMin = tank ? -280 : -340;
         if (this.now > o.fireAt && pos.z > zMin && pos.z < PLAYER_Z + 5) {
-          o.fireAt = this.now + (tank ? 3400 + Math.random() * 1600 : 2000 + Math.random() * 1400);
+          // Searchlit guns shoot faster at night once they have you.
+          const lit = !tank && this.dayness < 0.35 &&
+            Math.hypot(pos.x - p.x, pos.z - p.z) < 240 ? 0.65 : 1;
+          o.fireAt = this.now + (tank ? 3400 + Math.random() * 1600 : (2000 + Math.random() * 1400) * lit);
           const muzzle = pos.clone().setY(2.5);
           const dir = new THREE.Vector3()
             .subVectors(p, muzzle)
@@ -1271,18 +1692,21 @@ export class Game {
       } else if (!dead) {
         for (let j = this.enemies.length - 1; j >= 0; j--) {
           const e = this.enemies[j];
-          const info = ENEMY_INFO[e.kind];
-          if (pos.distanceTo(e.group.position) < info.hitR) {
+          if (pos.distanceTo(e.group.position) < e.hitR) {
             dead = true;
             if (--e.hp <= 0) {
               const epos = e.group.position;
-              this.explode(epos, e.kind === 'blimp' ? 44 : 18);
+              this.explode(epos, e.kind === 'blimp' || e.kind === 'balloon' ? 44 : 18);
               if (e.kind === 'blimp') {
                 // A burning airship goes up along its whole length.
                 this.explode(epos.clone().add(new THREE.Vector3(0, 1, -6)), 18);
                 this.explode(epos.clone().add(new THREE.Vector3(0, -1, 6)), 18);
               }
-              this.score += info.score;
+              this.score += e.score;
+              if (e.ace) this.emitAchv('ace-hunter', 'Ace Hunter', 750);
+              this.registerKill(
+                e.kind === 'blimp' ? 'zeppelin' : e.kind === 'balloon' ? 'balloon' : 'plane',
+              );
               this.removeEnemy(j);
             } else {
               this.explode(pos, 4);
@@ -1351,7 +1775,15 @@ export class Game {
     const pos = o.group.position;
     const big = o.kind === 'depot' || o.kind === 'castle';
     this.explode(pos.clone().setY(2), big ? 44 : 22, big ? 13 : 6, big);
-    this.score += GROUND_STATS[o.kind].score;
+    this.score += o.scoreOverride ?? GROUND_STATS[o.kind].score;
+    // A dead locomotive stops the whole train.
+    if (o.kind === 'train' && o.loco) {
+      for (const t of this.groundObjs) {
+        if (t.kind === 'train' && t.host === o.host) t.vz = 0;
+      }
+    }
+    if (o.kind === 'castle') this.emitAchv('castle-crusher', 'Castle Crusher', 750);
+    this.registerKill(o.kind);
     o.dead = true;
     o.damaged = true;
     o.fireAt = Infinity;
@@ -1540,6 +1972,7 @@ export class Game {
 
   private playerHit(crash: boolean): void {
     if (this.now < this.invulnUntil && !crash) return;
+    this.lastHitAt = this.now;
     this.invulnUntil = this.now + 1600;
     this.explode(this.player.position, crash ? 30 : 12);
     if (--this.lives <= 0) {
@@ -1550,6 +1983,9 @@ export class Game {
   private gameOver(reason: string): void {
     if (this.state !== 'playing') return;
     this.state = 'over';
+    this.photo = false;
+    document.getElementById('objective')?.classList.add('hidden');
+    document.getElementById('photoHint')?.classList.add('hidden');
     this.player.visible = false;
     this.explode(this.player.position, 36);
     this.hud.refuel.classList.add('hidden');

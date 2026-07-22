@@ -178,9 +178,74 @@
     #altbar { background: var(--steel); width: 60%; }
     .gauge .val { width: 30px; font-size: 12px; font-weight: 700; }
 
+    #objective {
+      position: absolute;
+      top: 58px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: var(--text);
+      background: rgba(30, 45, 59, 0.72);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 4px 12px;
+      z-index: 55;
+      white-space: nowrap;
+    }
+    #alert {
+      position: absolute;
+      top: 118px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-weight: 800;
+      font-size: 19px;
+      letter-spacing: 2px;
+      color: var(--accent);
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+      z-index: 60;
+      white-space: nowrap;
+    }
+    #toasts {
+      position: absolute;
+      left: 16px;
+      bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 70;
+      pointer-events: none;
+    }
+    .toast {
+      background: rgba(30, 45, 59, 0.94);
+      border: 1px solid var(--accent);
+      color: var(--text);
+      font-weight: 700;
+      font-size: 13px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      animation: toastIn 0.3s ease-out;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: none; }
+    }
+    #photoHint {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      z-index: 60;
+      white-space: nowrap;
+    }
+    #hsRank { font-size: 12px; color: var(--accent); margin: -12px 0 14px; letter-spacing: 1px; }
     #refuel {
       position: absolute;
-      top: 66px; left: 50%;
+      top: 90px; left: 50%;
       transform: translateX(-50%);
       color: var(--accent);
       font-weight: 700;
@@ -382,6 +447,10 @@
       </div>
     </div>
     <div id="refuel" class="hidden">REFUELING</div>
+    <div id="objective" class="hidden"></div>
+    <div id="alert" class="hidden"></div>
+    <div id="toasts"></div>
+    <div id="photoHint" class="hidden">PHOTO MODE — ARROWS ORBIT · W/S ZOOM · P TO EXIT</div>
     <div id="flash"></div>
 
     <div id="touch" class="hidden">
@@ -405,6 +474,7 @@
           <span class="k">B</span><span class="d">Drop bomb</span>
           <span class="k">M</span><span class="d">Mute sound</span>
           <span class="k">F</span><span class="d">Fullscreen</span>
+          <span class="k">P</span><span class="d">Photo mode</span>
         </div>
         <div class="hint">
           Bomb targets, dogfight at matching altitude, and watch your fuel —<br />
@@ -437,6 +507,7 @@
         </div>
         <div id="hsHeading" class="final-label"></div>
         <ol id="hsList"></ol>
+        <div id="hsRank"></div>
         <button id="againBtn">↻&nbsp;&nbsp;FLY AGAIN</button>
         <button id="changeBtn" class="secondary">✈&nbsp;&nbsp;CHANGE PLANE</button>
       </div>

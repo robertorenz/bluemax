@@ -787,6 +787,206 @@ export function makeBirdFlock(): BirdFlock {
   return { group, wingsL, wingsR };
 }
 
+/** Railway: gravel bed, sleepers, and twin rails following the curve. */
+export function makeRailway(params: RiverParams): THREE.Group {
+  const g = new THREE.Group();
+  g.add(makeLaneStrip(params, 6, 0x6b5f52, 0.05));
+  for (let z = -RIVER_LEN / 2 + 60; z < RIVER_LEN / 2 - 60; z += 14) {
+    const dx6 = riverXAt(params, z + 3) - riverXAt(params, z - 3);
+    const tie = box(3.4, 0.06, 0.7, 0x4a3f33, riverXAt(params, z), 0.1, z);
+    tie.rotation.y = -Math.atan2(dx6, 6);
+    tie.castShadow = false;
+    g.add(tie);
+  }
+  // Rails stay off the sharply-curved end ramps where straight segments break up.
+  for (let z = -RIVER_LEN / 2 + 300; z < RIVER_LEN / 2 - 300; z += 14) {
+    const x0 = riverXAt(params, z);
+    const x1 = riverXAt(params, z + 14);
+    const yaw = -Math.atan2(x1 - x0, 14);
+    for (const side of [-1, 1]) {
+      const rail = box(0.18, 0.12, Math.hypot(x1 - x0, 14) + 0.8, 0x8a8d92, (x0 + x1) / 2 + side * 1.1, 0.16, z + 7);
+      rail.rotation.y = yaw;
+      rail.castShadow = false;
+      g.add(rail);
+    }
+  }
+  return g;
+}
+
+/** Steam locomotive: boiler, cab, stack, drive wheels. */
+export function makeLocomotive(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(2.2, 1.3, 6.5, 0x2f3338, 0, 1.15, 0));
+  const boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 4.4, 10), lambert(0x24282c));
+  boiler.rotation.x = Math.PI / 2;
+  boiler.position.set(0, 1.95, -0.8);
+  boiler.castShadow = true;
+  g.add(boiler);
+  g.add(box(2.0, 1.7, 1.8, 0x3a3f44, 0, 2.2, 2.2));
+  const stack = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.42, 1.2, 8), lambert(0x1c1f22));
+  stack.position.set(0, 3.2, -2.2);
+  g.add(stack);
+  for (const lz of [-2, 0, 2]) {
+    for (const s of [-1, 1]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.2, 10), lambert(0x1c1f22));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(s * 1.05, 0.55, lz);
+      g.add(wheel);
+    }
+  }
+  return g;
+}
+
+/** Freight wagon. */
+export function makeTrainCar(): THREE.Group {
+  const g = new THREE.Group();
+  const colors = [0x6b4a3a, 0x51602f, 0x4a5560];
+  g.add(box(2.2, 1.7, 6.2, colors[Math.floor(Math.random() * colors.length)], 0, 1.35, 0));
+  for (const lz of [-2.2, 2.2]) {
+    for (const s of [-1, 1]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.18, 10), lambert(0x1c1f22));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(s * 1.0, 0.4, lz);
+      g.add(wheel);
+    }
+  }
+  return g;
+}
+
+/** Tethered observation balloon ("Drachen"): sausage envelope, basket, tether. */
+export function makeBalloon(): PlaneModel {
+  const g = new THREE.Group();
+  const env = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 5, 12), lambert(0xb8b09a));
+  env.rotation.x = Math.PI / 2;
+  env.castShadow = true;
+  g.add(env);
+  for (const ez of [-2.5, 2.5]) {
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(2.3, 10, 8), lambert(0xb8b09a));
+    cap.position.z = ez;
+    cap.scale.z = 0.7;
+    cap.castShadow = true;
+    g.add(cap);
+  }
+  g.add(box(0.3, 2.4, 2.6, 0xa39b85, 0, -1.4, 3.4));
+  g.add(box(0.9, 0.8, 0.9, 0x5b4632, 0, -3.6, 0));
+  g.add(box(0.06, 24, 0.06, 0x2b2f33, 0, -15.5, 0));
+  const prop = box(0.01, 0.01, 0.01, 0xb8b09a, 0, 0, 0);
+  prop.visible = false;
+  g.add(prop);
+  return { group: g, prop };
+}
+
+/** Twin-engine enemy bomber with a glass nose. */
+export function makeEnemyBomber(): PlaneModel {
+  const g = new THREE.Group();
+  g.add(box(1.6, 1.5, 8, 0x5a5f52, 0, 1.0, 0.3));
+  g.add(box(16, 0.3, 3, 0x6b7060, 0, 1.2, -0.5));
+  g.add(box(6.5, 0.2, 1.4, 0x6b7060, 0, 1.6, 3.9));
+  for (const s of [-1, 1]) g.add(box(0.15, 1.4, 1.2, 0x5a5f52, s * 3, 2.1, 3.9));
+  let prop!: THREE.Mesh;
+  let prop2: THREE.Mesh | undefined;
+  for (const s of [-1, 1]) {
+    const cowl = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 1.5, 10), lambert(0x4a4f44));
+    cowl.rotation.x = Math.PI / 2;
+    cowl.position.set(s * 3.4, 1.1, -1.5);
+    cowl.castShadow = true;
+    g.add(cowl);
+    const blade = box(0.16, 2.4, 0.1, 0x3c342a, s * 3.4, 1.1, -2.35);
+    g.add(blade);
+    if (s < 0) prop = blade;
+    else prop2 = blade;
+  }
+  const nose = new THREE.Mesh(
+    new THREE.SphereGeometry(0.55, 8, 6),
+    new THREE.MeshLambertMaterial({ color: 0x7fa8c9, transparent: true, opacity: 0.85 }),
+  );
+  nose.position.set(0, 1.0, -3.7);
+  g.add(nose);
+  return { group: g, prop, prop2 };
+}
+
+/** Airfield hangar. */
+export function makeHangar(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(9, 4.2, 11, 0x6e7176, 0, 2.1, 0));
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(6.6, 2.6, 4), lambert(0x4d5154));
+  roof.rotation.y = Math.PI / 4;
+  roof.scale.z = 1.3;
+  roof.position.y = 5.3;
+  roof.castShadow = true;
+  g.add(roof);
+  g.add(box(6.5, 3.2, 0.3, 0x3a3f44, 0, 1.6, 5.6));
+  return g;
+}
+
+/** Airfield control tower on stilts. */
+export function makeControlTower(): THREE.Group {
+  const g = new THREE.Group();
+  for (const [lx, lz] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) {
+    g.add(box(0.35, 6, 0.35, 0x6e6152, lx, 3, lz));
+  }
+  g.add(box(3.6, 2.2, 3.6, 0x8a7a5e, 0, 7.1, 0));
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(3.7, 1.0, 3.7),
+    new THREE.MeshLambertMaterial({ color: 0x7fa8c9, transparent: true, opacity: 0.8 }),
+  );
+  glass.position.y = 7.4;
+  g.add(glass);
+  g.add(box(4, 0.25, 4, 0x4d5154, 0, 8.3, 0));
+  return g;
+}
+
+/** Red-and-white lighthouse with a glowing lamp. */
+export function makeLighthouse(): THREE.Group {
+  const g = new THREE.Group();
+  for (let i = 0; i < 4; i++) {
+    const band = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5 - i * 0.15, 1.65 - i * 0.15, 2.6, 10),
+      lambert(i % 2 === 0 ? 0xe3ded2 : 0xa33226),
+    );
+    band.position.y = 1.3 + i * 2.6;
+    band.castShadow = true;
+    g.add(band);
+  }
+  const lamp = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 1.2, 8), new THREE.MeshBasicMaterial({ color: 0xffe9a0 }));
+  lamp.position.y = 11.2;
+  g.add(lamp);
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(1.2, 1.2, 8), lambert(0x3a3f44));
+  cap.position.y = 12.4;
+  cap.castShadow = true;
+  g.add(cap);
+  return g;
+}
+
+/** Gray warship with fore and aft gun turrets. */
+export function makeWarship(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(4.2, 1.6, 15, 0x5a6068, 0, 0.9, 0));
+  g.add(box(3.4, 1.2, 5.5, 0x6b717a, 0, 2.2, 0.5));
+  g.add(box(1.6, 1.6, 2.2, 0x7a808a, 0, 3.4, -0.5));
+  g.add(box(0.5, 2.6, 0.5, 0x4a5058, 0, 4.8, 0.8));
+  for (const tz of [-4.8, 4.6]) {
+    g.add(box(1.7, 0.9, 2.2, 0x4a5058, 0, 2.0, tz));
+    g.add(box(0.28, 0.28, 3, 0x2b2f33, 0, 2.3, tz - 2));
+  }
+  return g;
+}
+
+/** Night searchlight beam for AA guns; aim the holder, cone follows. */
+export function makeSearchBeam(): THREE.Group {
+  const holder = new THREE.Group();
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(5, 55, 12, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0xfff2c8, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide,
+    }),
+  );
+  cone.rotation.x = Math.PI;
+  cone.position.y = 27.5;
+  holder.add(cone);
+  return holder;
+}
+
 /** Jagged lightning bolt from cloud height to the ground. */
 export function makeLightning(): THREE.Group {
   const g = new THREE.Group();

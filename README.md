@@ -71,6 +71,23 @@ appear automatically — drag the stick to steer and climb/dive.
   blow past you, then swing around and attack head-on.
 - **Ground contact** — touching the ground away from a runway is a crash.
 
+**More to fight:** trains on winding railways (kill the locomotive to stop the
+whole train), tethered observation balloons, named enemy aces with kill
+announcements, bomber formations with fighter escorts, enemy airfields (hangars,
+control tower, parked planes, a searchlit guard gun), and — on the coast —
+warships and lighthouses.
+
+**Sortie objectives & achievements:** every flight gets a target ("destroy 3
+tanks") worth bonus points, with a fresh one after each completion. One-time
+achievements (fly under a bridge, run the canyon low, dead-stick landing, down
+an ace...) award career XP.
+
+**Day & night:** a five-minute cycle from bright day through orange dusk into
+night — when AA searchlights sweep the sky, lock onto you, and shoot faster.
+
+**Photo mode:** press P in flight to freeze the world and orbit the camera
+(arrows orbit, W/S zoom).
+
 ## Scoring
 
 | Target | Points |
