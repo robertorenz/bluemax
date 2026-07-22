@@ -455,7 +455,7 @@ export class Game {
     this.nextVillageAt = this.now + 30000;
     this.nextCastleAt = this.now + 80000;
     this.nextHillsAt = this.now + 14000;
-    this.nextCanyonAt = this.now + 40000;
+    this.nextCanyonAt = this.now + 90000 + Math.random() * 30000;
     this.startedAt = this.now;
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
