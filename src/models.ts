@@ -1150,16 +1150,69 @@ export function makeBullet(color: number): THREE.Mesh {
   );
 }
 
-export function makeCloud(): THREE.Group {
+export type CloudKind = 'cumulus' | 'stratus' | 'cirrus' | 'storm';
+
+/** A cloud of a given kind; userData.yMin/yMax suggest its altitude band. */
+export function makeCloud(kind?: CloudKind): THREE.Group {
+  const roll = Math.random();
+  const k: CloudKind =
+    kind ?? (roll < 0.4 ? 'cumulus' : roll < 0.65 ? 'stratus' : roll < 0.85 ? 'cirrus' : 'storm');
   const g = new THREE.Group();
-  const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.88 });
-  const n = 3 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < n; i++) {
-    const s = 4 + Math.random() * 6;
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(s, 7, 5), mat);
-    puff.scale.y = 0.45;
-    puff.position.set((i - n / 2) * s * 1.1, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 6);
-    g.add(puff);
+
+  if (k === 'cumulus') {
+    // Puffy fair-weather clusters.
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.88 });
+    const n = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) {
+      const s = 4 + Math.random() * 6;
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(s, 7, 5), mat);
+      puff.scale.y = 0.45;
+      puff.position.set((i - n / 2) * s * 1.1, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 6);
+      g.add(puff);
+    }
+    g.userData.yMin = 44;
+    g.userData.yMax = 60;
+  } else if (k === 'stratus') {
+    // Wide flat sheets hanging lower.
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 });
+    const n = 2 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const slab = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 6), mat);
+      slab.scale.set(18 + Math.random() * 12, 1.2 + Math.random() * 0.9, 6 + Math.random() * 4);
+      slab.position.set((i - n / 2) * 16, (Math.random() - 0.5) * 1.5, (Math.random() - 0.5) * 8);
+      g.add(slab);
+    }
+    g.userData.yMin = 45;
+    g.userData.yMax = 56;
+  } else if (k === 'cirrus') {
+    // Thin high wisps.
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.36 });
+    const n = 3 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const wisp = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 5), mat);
+      wisp.scale.set(9 + Math.random() * 8, 0.45, 1.6 + Math.random() * 1.6);
+      wisp.position.set((i - n / 2) * 12 + Math.random() * 5, (Math.random() - 0.5) * 3, (Math.random() - 0.5) * 10);
+      g.add(wisp);
+    }
+    g.userData.yMin = 68;
+    g.userData.yMax = 84;
+  } else {
+    // Towering cumulonimbus with an anvil top.
+    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, transparent: true, opacity: 0.92 });
+    const base = 7 + Math.random() * 3;
+    for (let i = 0; i < 3; i++) {
+      const s = base - i * 1.7;
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(s, 8, 6), mat);
+      puff.scale.y = 0.7;
+      puff.position.set((Math.random() - 0.5) * 4, i * (base * 0.85), (Math.random() - 0.5) * 4);
+      g.add(puff);
+    }
+    const anvil = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 6), mat);
+    anvil.scale.set(14 + Math.random() * 6, 1.6, 6 + Math.random() * 3);
+    anvil.position.y = 3 * (base * 0.85) + 2;
+    g.add(anvil);
+    g.userData.yMin = 42;
+    g.userData.yMax = 50;
   }
   return g;
 }

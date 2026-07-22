@@ -312,11 +312,13 @@ export class Game {
       this.chunks.push(chunk);
       this.scene.add(chunk);
     }
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 10; i++) {
       const cloud = makeCloud();
+      const yMin = (cloud.userData.yMin as number) ?? 44;
+      const yMax = (cloud.userData.yMax as number) ?? 60;
       cloud.position.set(
-        (Math.random() - 0.5) * 300,
-        44 + Math.random() * 16,
+        (Math.random() - 0.5) * 340,
+        yMin + Math.random() * (yMax - yMin),
         60 - Math.random() * 600,
       );
       this.clouds.push(cloud);
