@@ -359,13 +359,14 @@ export function makeRiver(params: RiverParams): THREE.Group {
   return g;
 }
 
-/** Country road: gray strip with a dashed centerline following the curve. */
+/** Country road: dark shoulders, asphalt surface, and a bold dashed centerline. */
 export function makeRoad(params: RiverParams): THREE.Group {
   const g = new THREE.Group();
-  g.add(makeLaneStrip(params, 10, 0x6b6f72, 0.07));
-  for (let z = -RIVER_LEN / 2 + 80; z < RIVER_LEN / 2 - 80; z += 46) {
+  g.add(makeLaneStrip(params, 12, 0x4d5154, 0.06));   // dark edge/shoulder
+  g.add(makeLaneStrip(params, 10.2, 0x6e7276, 0.08)); // asphalt surface
+  for (let z = -RIVER_LEN / 2 + 80; z < RIVER_LEN / 2 - 80; z += 26) {
     const dx = riverXAt(params, z + 3) - riverXAt(params, z - 3);
-    const dash = box(0.5, 0.04, 4, 0xd8d8d2, riverXAt(params, z), 0.13, z);
+    const dash = box(0.7, 0.04, 5.5, 0xe8e6da, riverXAt(params, z), 0.15, z);
     dash.rotation.y = -Math.atan2(dx, 6);
     dash.castShadow = false;
     g.add(dash);

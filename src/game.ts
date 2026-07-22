@@ -841,8 +841,8 @@ export class Game {
         pos.z += o.vz * dt;
         const rel = pos.z - o.host.group.position.z;
         if (Math.abs(rel) > RIVER_LEN / 2 - 130) o.vz = -o.vz;
-        // Trucks keep to their side of the road.
-        const laneOffset = o.kind === 'car' ? (o.vz > 0 ? 2 : -2) : 0;
+        // Trucks keep to their side: right lane heads away, left lane comes toward you.
+        const laneOffset = o.kind === 'car' ? (o.vz < 0 ? 2.4 : -2.4) : 0;
         pos.x = o.host.group.position.x + riverXAt(o.host.river, rel) + laneOffset;
         // Point the nose along the local course direction.
         const dzs = o.vz > 0 ? 6 : -6;

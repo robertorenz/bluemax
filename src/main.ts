@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { Game, type Hud } from './game';
-import { makePlane } from './models';
+import {
+  makePlane, ENEMY_FORMS, makeBlimp, makeBridge, makeFactory, makeTank,
+  makeShip, makeDepot, makeAAGun, makeCar, makeBuilding,
+} from './models';
 import { PLANES, PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
 import {
   loadScores, addScore, qualifies, best, fetchGlobalScores, remoteEnabled,
@@ -75,6 +78,79 @@ function makePlaneThumbs(): Record<string, string> {
 }
 
 const planeThumbs = makePlaneThumbs();
+
+// ---------------------------------------------------------------- scoring help
+
+/** Every scoreable target, best first, with a builder for its 3D thumbnail. */
+const SCORE_TABLE: { label: string; pts: number; build: () => THREE.Object3D }[] = [
+  { label: 'Zeppelin', pts: 300, build: () => makeBlimp().group },
+  { label: 'Enemy Triplane', pts: 150, build: () => makePlane(ENEMY_FORMS.tri, 0x9c3b34, 0xd0685c, 0xeed8d4).group },
+  { label: 'Bridge', pts: 150, build: makeBridge },
+  { label: 'Factory', pts: 125, build: makeFactory },
+  { label: 'Enemy Monoplane', pts: 120, build: () => makePlane(ENEMY_FORMS.mono, 0x5a5f66, 0x7d838c, 0xeed8d4).group },
+  { label: 'Enemy Biplane', pts: 100, build: () => makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4).group },
+  { label: 'Tank', pts: 100, build: () => makeTank().group },
+  { label: 'River Barge', pts: 100, build: makeShip },
+  { label: 'Fuel Depot', pts: 100, build: makeDepot },
+  { label: 'AA Gun', pts: 75, build: () => makeAAGun().group },
+  { label: 'Truck', pts: 60, build: makeCar },
+  { label: 'Building', pts: 50, build: makeBuilding },
+];
+
+/** Render each target model into a thumbnail, auto-framed by its bounding box. */
+function buildScoreGrid(): void {
+  const W = 220, H = 120;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(W, H);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xbfd6e8, 0x55584a, 1.15));
+  const sun = new THREE.DirectionalLight(0xfff2dd, 1.9);
+  sun.position.set(-4, 7, -5);
+  scene.add(sun);
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.1, 200);
+  const copy = document.createElement('canvas');
+  copy.width = W;
+  copy.height = H;
+  const ctx = copy.getContext('2d')!;
+
+  const grid = $('scoreGrid');
+  for (const target of SCORE_TABLE) {
+    const obj = target.build();
+    scene.add(obj);
+    const bbox = new THREE.Box3().setFromObject(obj);
+    const size = bbox.getSize(new THREE.Vector3());
+    const center = bbox.getCenter(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z * 0.8);
+    const dist = (maxDim / (2 * Math.tan((30 * Math.PI) / 360))) * 1.2;
+    cam.position.set(center.x - dist * 0.55, center.y + dist * 0.42, center.z - dist * 0.62);
+    cam.lookAt(center);
+    renderer.render(scene, cam);
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(renderer.domElement, 0, 0);
+    scene.remove(obj);
+
+    const item = document.createElement('div');
+    item.className = 'score-item';
+    const img = document.createElement('img');
+    img.src = copy.toDataURL();
+    img.alt = target.label;
+    img.draggable = false;
+    const name = document.createElement('div');
+    name.className = 's-name';
+    name.textContent = target.label;
+    const pts = document.createElement('div');
+    pts.className = 's-pts';
+    pts.textContent = `${target.pts} PTS`;
+    item.append(img, name, pts);
+    grid.appendChild(item);
+  }
+  renderer.dispose();
+}
+buildScoreGrid();
+
+const helpEl = $('help');
+$('helpBtn').addEventListener('click', () => helpEl.classList.remove('hidden'));
+$('helpClose').addEventListener('click', () => helpEl.classList.add('hidden'));
 
 function rebuildPlaneCards(): void {
   $('career').textContent = `CAREER ${careerXp.toLocaleString()} XP`;
@@ -245,6 +321,8 @@ $('fsBtn').addEventListener('click', toggleFullscreen);
 
 window.addEventListener('keydown', (e) => {
   if ((e.target as HTMLElement | null)?.tagName === 'INPUT') return;
+  if (e.key === 'Escape') helpEl.classList.add('hidden');
+  if (helpEl.classList.contains('hidden') === false) return; // help modal is open
   if (e.key === 'Enter' && game.state !== 'playing') startGame();
   if (e.key.toLowerCase() === 'f' && !e.repeat) toggleFullscreen();
 });

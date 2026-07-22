@@ -79,6 +79,29 @@
     }
     .touch-btn:active { background: rgba(232, 163, 61, 0.4); }
 
+    /* ---------- Scoring help ---------- */
+    #help .modal { width: 640px; }
+    .help-title { font-size: 32px !important; letter-spacing: 6px !important; }
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+      max-height: 56vh;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .score-grid::-webkit-scrollbar { width: 8px; }
+    .score-grid::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 4px; }
+    .score-item {
+      border: 1px solid var(--panel-border);
+      border-radius: 8px;
+      padding: 8px 6px 7px;
+    }
+    .score-item img { display: block; width: 100%; height: 54px; object-fit: contain; }
+    .s-name { font-size: 11px; font-weight: 600; color: var(--text); margin-top: 4px; }
+    .s-pts { font-size: 15px; font-weight: 800; color: var(--accent); }
+
     /* ---------- Small screens ---------- */
     @media (max-width: 760px) {
       .modal, #menu .modal {
@@ -375,6 +398,16 @@
           line up with a runway and dive to touch down, refuel, and take off again.
         </div>
         <button id="startBtn">▶&nbsp;&nbsp;TAKE OFF</button>
+        <button id="helpBtn" class="secondary">🎯&nbsp;&nbsp;SCORING</button>
+      </div>
+    </div>
+
+    <div id="help" class="overlay hidden">
+      <div class="modal">
+        <h1 class="help-title">SCORING</h1>
+        <div class="sub">What every kill is worth</div>
+        <div class="score-grid" id="scoreGrid"></div>
+        <button id="helpClose">✕&nbsp;&nbsp;CLOSE</button>
       </div>
     </div>
 
