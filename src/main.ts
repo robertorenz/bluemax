@@ -1,4 +1,6 @@
+import * as THREE from 'three';
 import { Game, type Hud } from './game';
+import { makePlane } from './models';
 import { PLANES, PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
 import {
   loadScores, addScore, qualifies, best, fetchGlobalScores, remoteEnabled,
@@ -40,7 +42,39 @@ stored = LEGACY_PLANES[stored] ?? stored;
 let selectedPlane: PlaneType =
   PLANE_MAP[stored] && unlocked(stored) ? stored : DEFAULT_PLANE;
 
-const WING_BARS: Record<string, number> = { mono: 1, bi: 2, tri: 3, bisleek: 2, ww2: 1 };
+/** Render each hangar model once into a small transparent thumbnail. */
+function makePlaneThumbs(): Record<string, string> {
+  const W = 220, H = 130;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(W, H);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xbfd6e8, 0x55584a, 1.15));
+  const sun = new THREE.DirectionalLight(0xfff2dd, 1.9);
+  sun.position.set(-4, 7, -5);
+  scene.add(sun);
+  const cam = new THREE.PerspectiveCamera(30, W / H, 0.1, 100);
+  cam.position.set(-9, 5.5, -10); // 3/4 front-left; models face -z
+  cam.lookAt(0, 1.1, 0.4);
+
+  const copy = document.createElement('canvas');
+  copy.width = W;
+  copy.height = H;
+  const ctx = copy.getContext('2d')!;
+  const thumbs: Record<string, string> = {};
+  for (const def of PLANES) {
+    const { group } = makePlane(def.shape, def.body, def.wing, def.detail, { mouth: def.mouth });
+    scene.add(group);
+    renderer.render(scene, cam);
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(renderer.domElement, 0, 0);
+    thumbs[def.id] = copy.toDataURL();
+    scene.remove(group);
+  }
+  renderer.dispose();
+  return thumbs;
+}
+
+const planeThumbs = makePlaneThumbs();
 
 function rebuildPlaneCards(): void {
   $('career').textContent = `CAREER ${careerXp.toLocaleString()} XP`;
@@ -53,11 +87,11 @@ function rebuildPlaneCards(): void {
     card.classList.toggle('locked', !isUnlocked);
     card.classList.toggle('selected', def.id === selectedPlane);
 
-    const icon = document.createElement('div');
-    icon.className = 'wing-icon';
-    for (let i = 0; i < (WING_BARS[def.shape] ?? 1); i++) {
-      icon.appendChild(document.createElement('i'));
-    }
+    const icon = document.createElement('img');
+    icon.className = 'p-thumb';
+    icon.src = planeThumbs[def.id];
+    icon.alt = def.label;
+    icon.draggable = false;
     const name = document.createElement('div');
     name.className = 'p-name';
     name.textContent = def.label.toUpperCase();
