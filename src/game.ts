@@ -455,7 +455,7 @@ export class Game {
     this.nextVillageAt = this.now + 30000;
     this.nextCastleAt = this.now + 80000;
     this.nextHillsAt = this.now + 14000;
-    this.nextCanyonAt = this.now + 100000;
+    this.nextCanyonAt = this.now + 40000;
     this.startedAt = this.now;
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
@@ -726,6 +726,12 @@ export class Game {
         ? this.now + 15000 + Math.random() * 9000
         : this.now + 4000;
     }
+    // Canyons check first so rivers/roads don't monopolize the lane slot.
+    if (this.now > this.nextCanyonAt) {
+      this.nextCanyonAt = this.spawnCanyon()
+        ? this.now + 90000 + Math.random() * 60000
+        : this.now + 9000;
+    }
     if (this.now > this.nextRiverAt) {
       this.nextRiverAt = this.spawnRiver()
         ? this.now + 40000 + Math.random() * 16000
@@ -750,11 +756,6 @@ export class Game {
       this.nextHillsAt = this.spawnHills()
         ? this.now + 24000 + Math.random() * 18000
         : this.now + 7000;
-    }
-    if (this.now > this.nextCanyonAt) {
-      this.nextCanyonAt = this.spawnCanyon()
-        ? this.now + 160000 + Math.random() * 100000
-        : this.now + 12000;
     }
   }
 
