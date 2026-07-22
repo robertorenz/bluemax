@@ -69,6 +69,41 @@ export class AudioFx {
     this.rainGain.gain.setTargetAtTime(intensity * 0.13, this.ctx.currentTime, 0.6);
   }
 
+  /** Rolling thunder, delayed like a distant strike. */
+  thunder(delaySec = 0.8): void {
+    if (!this.ctx) return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime + delaySec;
+
+    const src = ctx.createBufferSource();
+    src.buffer = this.noise;
+    src.loop = true;
+    src.playbackRate.value = 0.32; // deep and slow
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(240, t);
+    lp.frequency.exponentialRampToValueAtTime(55, t + 2.4);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.09);
+    g.gain.exponentialRampToValueAtTime(0.14, t + 1.0);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 2.8);
+    src.connect(lp).connect(g).connect(this.master);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + 3);
+
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(52, t);
+    sub.frequency.exponentialRampToValueAtTime(28, t + 0.9);
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0.38, t);
+    sg.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
+    sub.connect(sg).connect(this.master);
+    sub.start(t);
+    sub.stop(t + 1.4);
+  }
+
   /** Drive the engine drone; intensity 0..1 maps to rpm pitch and volume. */
   setEngine(intensity: number): void {
     if (!this.ctx) return;

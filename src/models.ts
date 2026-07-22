@@ -22,6 +22,8 @@ export interface PlaneModel {
 /** Enemy archetype ids kept for the red air force. */
 export type PlaneShape = 'mono' | 'bi' | 'tri';
 
+export type Nation = 'uk' | 'de' | 'fr' | 'us' | 'ussr';
+
 /** Geometry recipe for one aircraft — enough knobs to make each type recognizable. */
 export interface PlaneForm {
   fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby';
@@ -35,6 +37,33 @@ export interface PlaneForm {
   mouth?: boolean;    // shark-mouth nose art
   axleWing?: boolean; // Fokker Dr.I stub wing between the wheels
   gunner?: boolean;   // rear observer cockpit
+  nation?: Nation;    // wing markings
+  dihedral?: number;  // outer wing panel tilt, radians
+  exhaust?: boolean;  // inline-engine exhaust stacks
+  guns?: boolean;     // cowl machine guns
+}
+
+/** National insignia painted on the top wing surfaces. */
+function addMarking(g: THREE.Group, nation: Nation, x: number, ySurf: number, z: number): void {
+  const disc = (r: number, color: number, dy: number): void => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 0.04, 16), lambert(color));
+    m.position.set(x, ySurf + dy, z);
+    g.add(m);
+  };
+  if (nation === 'uk') {
+    disc(0.58, 0x1d3f7a, 0); disc(0.4, 0xe8e4da, 0.02); disc(0.2, 0xa33226, 0.04);
+  } else if (nation === 'fr') {
+    disc(0.58, 0xa33226, 0); disc(0.4, 0xe8e4da, 0.02); disc(0.2, 0x1d3f7a, 0.04);
+  } else if (nation === 'us') {
+    disc(0.58, 0x1d3f7a, 0); disc(0.32, 0xe8e4da, 0.02); disc(0.13, 0xa33226, 0.04);
+  } else if (nation === 'ussr') {
+    disc(0.58, 0xe8e4da, 0); disc(0.46, 0xa33226, 0.02);
+  } else {
+    g.add(box(1.22, 0.04, 0.52, 0xe8e4da, x, ySurf, z));
+    g.add(box(0.52, 0.04, 1.22, 0xe8e4da, x, ySurf, z));
+    g.add(box(1.05, 0.05, 0.36, 0x1c1c1c, x, ySurf + 0.02, z));
+    g.add(box(0.36, 0.05, 1.05, 0x1c1c1c, x, ySurf + 0.02, z));
+  }
 }
 
 /**
@@ -94,9 +123,32 @@ export function makePlane(form: PlaneForm, body: number, wing: number, detail: n
     g.add(box(0.7, 0.5, 1.9, 0x3a4046, 0, 0.22, 0.9));
   }
 
-  // Wings.
+  // Wings: center section plus tapered outer panels with dihedral and tip caps.
+  const dihedral = form.dihedral ?? 0.03;
+  const topWingY = Math.max(...form.wings.map((w) => w.y));
   for (const w of form.wings) {
-    g.add(box(w.span, 0.22, w.chord, wing, 0, w.y, -0.6 + (w.stagger ?? 0)));
+    const zc = -0.6 + (w.stagger ?? 0);
+    const centerSpan = w.span * 0.5;
+    const outerSpan = w.span * 0.27;
+    g.add(box(centerSpan, 0.22, w.chord, wing, 0, w.y, zc));
+    for (const side of [-1, 1] as const) {
+      const px = side * (centerSpan / 2 + outerSpan / 2 - 0.06);
+      const py = w.y + Math.sin(dihedral) * (outerSpan / 2);
+      const panel = box(outerSpan, 0.2, w.chord * 0.82, wing, px, py, zc + w.chord * 0.05);
+      panel.rotation.z = side * dihedral;
+      g.add(panel);
+      const tipY = w.y + Math.sin(dihedral) * outerSpan;
+      const tip = box(
+        outerSpan * 0.34, 0.18, w.chord * 0.55, wing,
+        side * (centerSpan / 2 + outerSpan * 1.05), tipY, zc + w.chord * 0.12,
+      );
+      tip.rotation.z = side * dihedral;
+      g.add(tip);
+      // Insignia on the outer panels of the top wing.
+      if (form.nation && w.y === topWingY) {
+        addMarking(g, form.nation, px, py + 0.13, zc + w.chord * 0.05);
+      }
+    }
   }
   if (form.axleWing) g.add(box(2.7, 0.14, 0.9, wing, 0, -0.15, -0.85));
 
@@ -105,9 +157,25 @@ export function makePlane(form: PlaneForm, body: number, wing: number, detail: n
   if (form.struts && form.struts !== 'none' && ys.length >= 2) {
     const top = Math.max(...ys);
     const bottom = Math.min(...ys);
-    const xs = form.struts === 'pair' ? [-2.9, 2.9] : [-3.0, -1.15, 1.15, 3.0];
+    const xs = form.struts === 'pair' ? [-2.1, 2.1] : [-2.2, -1.05, 1.05, 2.2];
     for (const sx of xs) {
       g.add(box(0.12, top - bottom + 0.2, 0.12, detail, sx, (top + bottom) / 2, -0.65));
+    }
+  }
+
+  // Inline-engine exhaust stacks along the nose.
+  if (form.exhaust) {
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        g.add(box(0.09, 0.13, 0.42, 0x23272b, side * 0.54, 1.28, noseZ + 1.0 + i * 0.55));
+      }
+    }
+  }
+
+  // Cowl machine guns.
+  if (form.guns) {
+    for (const sx of [-0.22, 0.22]) {
+      g.add(box(0.11, 0.11, 1.0, 0x22262a, sx, 1.44, -1.5));
     }
   }
 
@@ -172,6 +240,25 @@ export const ENEMY_FORMS: Record<PlaneShape, PlaneForm> = {
     ],
   },
 };
+
+/** Jagged lightning bolt from cloud height to the ground. */
+export function makeLightning(): THREE.Group {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xeaf2ff });
+  let x = 0, y = 48, z = 0;
+  while (y > 2) {
+    const ny = y - (5 + Math.random() * 6);
+    const nx = x + (Math.random() - 0.5) * 8;
+    const nz = z + (Math.random() - 0.5) * 3;
+    const dir = new THREE.Vector3(nx - x, ny - y, nz - z);
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.5, dir.length(), 0.5), mat);
+    seg.position.set((x + nx) / 2, (y + ny) / 2, (z + nz) / 2);
+    seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+    g.add(seg);
+    x = nx; y = ny; z = nz;
+  }
+  return g;
+}
 
 /** Big slow zeppelin: ellipsoid hull, tail fins, gondola with a pusher prop. */
 export function makeBlimp(): PlaneModel {

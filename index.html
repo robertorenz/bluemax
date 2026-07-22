@@ -29,6 +29,16 @@
       touch-action: none;
     }
 
+    #flash {
+      position: absolute;
+      inset: 0;
+      background: #eaf2ff;
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+      pointer-events: none;
+      z-index: 45;
+    }
+
     /* ---------- Touch controls ---------- */
     #touch {
       position: absolute;
@@ -372,6 +382,7 @@
       </div>
     </div>
     <div id="refuel" class="hidden">REFUELING</div>
+    <div id="flash"></div>
 
     <div id="touch" class="hidden">
       <div id="stick"><div id="stickNub"></div></div>

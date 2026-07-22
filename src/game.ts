@@ -4,7 +4,8 @@ import { P } from './palette';
 import {
   makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
-  makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, riverXAt, RIVER_LEN,
+  makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
+  riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneShape,
 } from './models';
 import { PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
@@ -161,6 +162,8 @@ export class Game {
   private weatherTarget = 0;
   private nextWeatherAt = 0;
   private lastSkyW = -1;
+  private lightningBoost = 0;
+  private nextStrikeAt = 0;
 
   private enemies: AirEnemy[] = [];
   private groundObjs: GroundObj[] = [];
@@ -313,8 +316,17 @@ export class Game {
     this.weather = THREE.MathUtils.damp(this.weather, this.weatherTarget, 0.12, dt);
     const w = this.weather;
 
-    this.sun.intensity = THREE.MathUtils.lerp(1.7, 0.55, w);
-    this.hemi.intensity = THREE.MathUtils.lerp(0.95, 0.55, w);
+    // Lightning strikes during a full storm.
+    if (w > 0.85 && this.now > this.nextStrikeAt) {
+      this.strikeLightning();
+      this.nextStrikeAt = this.now + 3500 + Math.random() * 8500;
+    } else if (w < 0.5) {
+      this.nextStrikeAt = Math.max(this.nextStrikeAt, this.now + 4000);
+    }
+    this.lightningBoost = THREE.MathUtils.damp(this.lightningBoost, 0, 9, dt);
+
+    this.sun.intensity = THREE.MathUtils.lerp(1.7, 0.55, w) + this.lightningBoost * 0.9;
+    this.hemi.intensity = THREE.MathUtils.lerp(0.95, 0.55, w) + this.lightningBoost * 1.3;
     const fog = this.scene.fog as THREE.Fog;
     fog.color.set(P.fog).lerp(new THREE.Color(0x6b7683), w);
     fog.near = THREE.MathUtils.lerp(260, 170, w);
@@ -340,6 +352,21 @@ export class Game {
       (this.rain.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     }
     this.audio.setRain(rainAmount);
+  }
+
+  /** One lightning strike: bolt in the distance, screen flash, delayed thunder. */
+  strikeLightning(lifeMs = 170): void {
+    const bolt = makeLightning();
+    bolt.position.set((Math.random() - 0.5) * 440, 0, -120 - Math.random() * 280);
+    this.scene.add(bolt);
+    setTimeout(() => this.scene.remove(bolt), lifeMs);
+    this.lightningBoost = 1;
+    const flash = document.getElementById('flash');
+    if (flash) {
+      flash.style.opacity = '0.3';
+      setTimeout(() => { flash.style.opacity = '0'; }, 70);
+    }
+    this.audio.thunder(0.5 + Math.random() * 2);
   }
 
   private buildPlayer(): void {
