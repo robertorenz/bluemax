@@ -17,8 +17,9 @@ P-26 Peashooter, Gloster Gladiator, Polikarpov I-16, Spitfire Mk I, Bf 109 E,
 P-40 Flying Tiger, and finally the P-51 Mustang at 50,000 XP. Later aircraft
 steer faster, dive harder, and shoot quicker.
 
-**High scores:** a top-10 table with arcade-style 3-letter initials, kept in your
-browser. The HUD shows your all-time best.
+**High scores:** arcade-style 3-letter initials feed a **shared global leaderboard**
+(Supabase, read/insert-only via row-level security), with a local top-10 fallback
+when offline. The HUD shows your all-time personal best.
 
 Enemy air traffic is mixed too: biplanes (100 pts), fast monoplanes (120 pts),
 tough triplanes (150 pts), and huge slow **zeppelins** (300 pts, 7 hits) that lob
