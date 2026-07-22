@@ -5,7 +5,7 @@ import {
   makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
-  makeCottage, makeChurch, makeCastle, makeHill, makeRollingHill, makeWindmill, makeCanyon,
+  makeCottage, makeChurch, makeCastle, makeHill, makeRollingHill, makeWindmill, makeCanyon, makeLake,
   canyonTaper, CANYON_WIDTH, CANYON_WALL_H,
   riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneShape,
@@ -50,7 +50,7 @@ interface AirEnemy {
 type GroundKind =
   | 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot'
   | 'river' | 'bridge' | 'ship' | 'road' | 'car' | 'castle'
-  | 'hill' | 'windmill' | 'canyon';
+  | 'hill' | 'windmill' | 'canyon' | 'lake';
 
 /** Lane kinds share the long wandering-strip behavior. */
 const isLane = (k: GroundKind): boolean => k === 'river' || k === 'road' || k === 'canyon';
@@ -99,6 +99,7 @@ const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: numb
   castle:   { hp: 4, score: 400, radius: 22 },
   windmill: { hp: 1, score: 100, radius: 14 },
   hill:     { hp: 99, score: 0, radius: 0 },
+  lake:     { hp: 99, score: 0, radius: 0 },
   canyon:   { hp: 99, score: 0, radius: 0 },
   river:    { hp: 99, score: 0, radius: 0 },
   road:     { hp: 99, score: 0, radius: 0 },
@@ -207,6 +208,7 @@ export class Game {
   private nextCastleAt = 0;
   private nextHillsAt = 0;
   private nextCanyonAt = 0;
+  private nextLakeAt = 0;
   private startedAt = 0;
 
   constructor(container: HTMLElement, private hud: Hud) {
@@ -460,6 +462,7 @@ export class Game {
     this.nextCastleAt = this.now + 80000;
     this.nextHillsAt = this.now + 14000;
     this.nextCanyonAt = this.now + 90000 + Math.random() * 30000;
+    this.nextLakeAt = this.now + 9000;
     this.startedAt = this.now;
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
@@ -768,6 +771,11 @@ export class Game {
         ? this.now + 24000 + Math.random() * 18000
         : this.now + 7000;
     }
+    if (this.now > this.nextLakeAt) {
+      this.nextLakeAt = this.spawnLake()
+        ? this.now + 20000 + Math.random() * 16000
+        : this.now + 6000;
+    }
   }
 
   private spawnEnemy(): void {
@@ -891,6 +899,17 @@ export class Game {
     castle.position.set(x, 0, -515);
     this.scene.add(castle);
     this.groundObjs.push({ group: castle, kind: 'castle', hp: GROUND_STATS.castle.hp, fireAt: Infinity });
+    return true;
+  }
+
+  /** A pond or small lake off in the fields. */
+  private spawnLake(): boolean {
+    const x = (Math.random() - 0.5) * 130;
+    if (this.blocksRunwayLane('lake', x, 8)) return false;
+    const lake = makeLake();
+    lake.position.set(x, 0, -510 - Math.random() * 30);
+    this.scene.add(lake);
+    this.groundObjs.push({ group: lake, kind: 'lake', hp: 99, fireAt: Infinity });
     return true;
   }
 

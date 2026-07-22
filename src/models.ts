@@ -615,6 +615,43 @@ export function makeCanyon(params: RiverParams): THREE.Group {
   return g;
 }
 
+/** Irregular pond or lake: jittered water polygon with a sandy shore ring. */
+export function makeLake(): THREE.Group {
+  const g = new THREE.Group();
+  const n = 14;
+  const rBase = 8 + Math.random() * 13;
+  const radii: number[] = [];
+  for (let i = 0; i < n; i++) radii.push(rBase * (0.7 + Math.random() * 0.55));
+
+  const fan = (scale: number, y: number, color: number): THREE.Mesh => {
+    const pos: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2;
+      const a1 = (((i + 1) % n) / n) * Math.PI * 2;
+      const r0 = radii[i] * scale;
+      const r1 = radii[(i + 1) % n] * scale;
+      pos.push(
+        0, y, 0,
+        Math.cos(a1) * r1, y, Math.sin(a1) * r1,
+        Math.cos(a0) * r0, y, Math.sin(a0) * r0,
+      );
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }),
+    );
+    mesh.receiveShadow = true;
+    return mesh;
+  };
+
+  g.add(fan(1.15, 0.03, 0x9a8d64)); // sandy shore
+  g.add(fan(1, 0.06, 0x3d6b96));    // water
+  return g;
+}
+
 /** Smooth rolling hill: a wide grassy dome (stretched a little along z). */
 export function makeRollingHill(r: number, h: number, rz: number): THREE.Group {
   const g = new THREE.Group();
