@@ -3,7 +3,7 @@ import { AudioFx } from './audio';
 import { P } from './palette';
 import {
   makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
-  makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
+  makeCloud, makeBirdFlock, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
   makeCottage, makeChurch, makeCastle, makeHill, makeRollingHill, makeWindmill, makeCanyon, makeLake,
   canyonTaper, CANYON_WIDTH, CANYON_WALL_H,
@@ -187,6 +187,7 @@ export class Game {
   private chunks: THREE.Group[] = [];
   private clouds: THREE.Group[] = [];
   private cloudMats: THREE.MeshLambertMaterial[] = [];
+  private flocks: { group: THREE.Group; wingsL: THREE.Group[]; wingsR: THREE.Group[]; phase: number; vz: number }[] = [];
 
   // Weather: 0 = clear skies, 1 = full storm.
   private sun!: THREE.DirectionalLight;
@@ -324,6 +325,17 @@ export class Game {
       this.clouds.push(cloud);
       this.cloudMats.push((cloud.children[0] as THREE.Mesh).material as THREE.MeshLambertMaterial);
       this.scene.add(cloud);
+    }
+    for (let i = 0; i < 4; i++) {
+      const flock = makeBirdFlock();
+      const low = flock.group.userData.low === true;
+      flock.group.position.set(
+        (Math.random() - 0.5) * 260,
+        low ? 4 + Math.random() * 6 : 8 + Math.random() * 14,
+        -100 - Math.random() * 400,
+      );
+      this.flocks.push({ ...flock, phase: Math.random() * 10, vz: 4 + Math.random() * 6 });
+      this.scene.add(flock.group);
     }
     this.buildRain();
   }
@@ -1416,6 +1428,23 @@ export class Game {
       if (cloud.position.z > 100) {
         cloud.position.z = -620;
         cloud.position.x = (Math.random() - 0.5) * 300;
+      }
+    }
+    // Bird flocks flap along below the flight paths.
+    for (const f of this.flocks) {
+      f.phase += dt * 9;
+      const flap = Math.sin(f.phase) * 0.6;
+      for (const w of f.wingsL) w.rotation.z = flap;
+      for (const w of f.wingsR) w.rotation.z = -flap;
+      f.group.position.z += (this.scroll * 0.55 + f.vz) * dt;
+      f.group.position.x += Math.sin(f.phase * 0.08) * 2.5 * dt;
+      if (f.group.position.z > 110) {
+        const low = f.group.userData.low === true;
+        f.group.position.set(
+          (Math.random() - 0.5) * 260,
+          low ? 4 + Math.random() * 6 : 8 + Math.random() * 14,
+          -620 - Math.random() * 120,
+        );
       }
     }
   }

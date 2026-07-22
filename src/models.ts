@@ -705,6 +705,56 @@ export function makeWindmill(): AAGunModel {
   return { group: g, barrel: sails };
 }
 
+export interface BirdFlock {
+  group: THREE.Group;
+  wingsL: THREE.Group[];
+  wingsR: THREE.Group[];
+}
+
+/** Birds: either geese in a V-formation or a loose low pack of ducks. */
+export function makeBirdFlock(): BirdFlock {
+  const geese = Math.random() < 0.6;
+  const s = geese ? 1 : 0.7; // ducks are smaller
+  const color = geese ? 0x3a3f44 : 0x4a3f30;
+  const group = new THREE.Group();
+  const wingsL: THREE.Group[] = [];
+  const wingsR: THREE.Group[] = [];
+  const n = geese ? 5 + Math.floor(Math.random() * 4) : 6 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < n; i++) {
+    const bird = new THREE.Group();
+    bird.add(box(0.16 * s, 0.08 * s, 0.5 * s, color, 0, 0, 0)); // body
+    // Neck and head reaching forward — long on geese, stubby on ducks.
+    const neckLen = geese ? 0.34 : 0.18;
+    bird.add(box(0.07 * s, 0.06 * s, neckLen, color, 0, 0.04 * s, -(0.25 + neckLen / 2) * s));
+    bird.add(box(0.09 * s, 0.08 * s, 0.12 * s, color, 0, 0.07 * s, -(0.3 + neckLen) * s));
+    const mkWing = (side: -1 | 1): THREE.Group => {
+      const holder = new THREE.Group();
+      holder.position.set(side * 0.08 * s, 0.02, 0);
+      holder.add(box(0.72 * s, 0.04, 0.24 * s, color, side * 0.36 * s, 0, 0));
+      bird.add(holder);
+      return holder;
+    };
+    wingsL.push(mkWing(-1));
+    wingsR.push(mkWing(1));
+    if (geese) {
+      // Staggered V behind the leader.
+      const row = Math.ceil(i / 2);
+      const side = i % 2 === 0 ? 1 : -1;
+      bird.position.set(side * row * 1.1, (Math.random() - 0.5) * 0.6, row * 1.0);
+    } else {
+      // Ducks bunch up in a loose pack.
+      bird.position.set(
+        (Math.random() - 0.5) * 3.2,
+        (Math.random() - 0.5) * 0.8,
+        (Math.random() - 0.5) * 3.2,
+      );
+    }
+    group.add(bird);
+  }
+  group.userData.low = !geese; // duck packs fly lower
+  return { group, wingsL, wingsR };
+}
+
 /** Jagged lightning bolt from cloud height to the ground. */
 export function makeLightning(): THREE.Group {
   const g = new THREE.Group();
