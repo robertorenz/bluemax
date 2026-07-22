@@ -113,6 +113,10 @@ export const PLANES: PlaneDef[] = [
     form: { fuselage: 'tbf', nose: 'radial', nation: 'us', wings: [] },
     steer: 44, climb: 13, dive: 19, bombs: 46, gunMs: 135,
     body: 0x3d5166, wing: 0x51677e, detail: 0x8fa3b5, xp: 55000 },
+  { id: 'me262', label: 'Me 262 Schwalbe', year: 1944, desc: 'The first jet — nothing else comes close',
+    form: { fuselage: 'me262', nose: 'spinner', nation: 'de', wings: [] },
+    steer: 66, climb: 15, dive: 26, bombs: 24, gunMs: 90,
+    body: 0x5c6258, wing: 0x6b7265, detail: 0x3a424c, xp: 62000 },
 ];
 
 export const PLANE_MAP: Record<string, PlaneDef> =

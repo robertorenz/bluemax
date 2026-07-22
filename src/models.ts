@@ -27,7 +27,7 @@ export type Nation = 'uk' | 'de' | 'fr' | 'us' | 'ussr';
 
 /** Geometry recipe for one aircraft — enough knobs to make each type recognizable. */
 export interface PlaneForm {
-  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby' | 'p38' | 'tbf';
+  fuselage: 'box' | 'round' | 'slim' | 'deep' | 'stubby' | 'p38' | 'tbf' | 'me262';
   nose: 'flat' | 'spinner' | 'radial' | 'chin';
   wings: { y: number; span: number; chord: number; stagger?: number }[];
   struts?: 'none' | 'pair' | 'quad';
@@ -74,6 +74,7 @@ function addMarking(g: THREE.Group, nation: Nation, x: number, ySurf: number, z:
 export function makePlane(form: PlaneForm, body: number, wing: number, detail: number): PlaneModel {
   if (form.fuselage === 'p38') return makeP38(body, wing, detail, form);
   if (form.fuselage === 'tbf') return makeTBF(body, wing, detail, form);
+  if (form.fuselage === 'me262') return makeMe262(body, wing, detail, form);
   const g = new THREE.Group();
 
   // Fuselage.
@@ -388,6 +389,75 @@ function makeTBF(body: number, wing: number, detail: number, form: PlaneForm): P
   g.add(tNose);
   g.add(box(0.7, 0.08, 0.5, 0x5a5e62, 0, 0.05, 1.85));
   g.add(box(0.08, 0.7, 0.5, 0x5a5e62, 0, 0.05, 1.85));
+
+  return { group: g, prop };
+}
+
+/**
+ * Messerschmitt Me 262 Schwalbe, drawn in detail: shark-like pointed nose
+ * packing four 30mm cannon, triangular-ish sleek fuselage, swept wings with
+ * two underslung turbojet nacelles (glowing exhausts, no propeller), and the
+ * tall swept fin with high-set tailplane.
+ */
+function makeMe262(body: number, wing: number, _detail: number, form: PlaneForm): PlaneModel {
+  const g = new THREE.Group();
+
+  // Sleek fuselage and pointed nose.
+  g.add(box(1.0, 1.05, 6.4, body, 0, 1.0, 0.5));
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.56, 2.0, 10), lambert(body));
+  nose.rotation.x = -Math.PI / 2;
+  nose.position.set(0, 1.0, -3.6);
+  nose.castShadow = true;
+  g.add(nose);
+  // Four 30mm cannon muzzles clustered in the nose.
+  for (const [gx, gy] of [[-0.17, 1.14], [0.17, 1.14], [-0.17, 0.86], [0.17, 0.86]]) {
+    g.add(box(0.07, 0.07, 0.7, 0x1a1d20, gx, gy, -3.2));
+  }
+  // Canopy.
+  const glass = new THREE.MeshLambertMaterial({ color: 0x7fa8c9, transparent: true, opacity: 0.85 });
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.52, 1.6), glass);
+  canopy.position.set(0, 1.72, -0.5);
+  g.add(canopy);
+
+  // Swept wings with insignia.
+  g.add(box(2.6, 0.24, 2.5, wing, 0, 0.55, 0.3));
+  for (const side of [-1, 1] as const) {
+    const panel = box(4.8, 0.22, 2.0, wing, side * 3.4, 0.55, 0.85);
+    panel.rotation.y = side * 0.28; // leading-edge sweep
+    g.add(panel);
+    const tip = box(1.2, 0.18, 1.3, wing, side * 5.5, 0.55, 1.5);
+    tip.rotation.y = side * 0.28;
+    g.add(tip);
+    if (form.nation) addMarking(g, form.nation, side * 3.6, 0.72, 0.9);
+
+    // Underslung turbojet nacelle.
+    const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.5, 3.6, 12), lambert(0x4d5157));
+    jet.rotation.x = Math.PI / 2;
+    jet.position.set(side * 2.15, 0.1, 0.4);
+    jet.castShadow = true;
+    g.add(jet);
+    const intake = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.12, 12), lambert(0x1a1d20));
+    intake.rotation.x = Math.PI / 2;
+    intake.position.set(side * 2.15, 0.1, -1.45);
+    g.add(intake);
+    const exhaust = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.38, 0.38, 0.14, 12),
+      new THREE.MeshBasicMaterial({ color: 0xe8863d }),
+    );
+    exhaust.rotation.x = Math.PI / 2;
+    exhaust.position.set(side * 2.15, 0.1, 2.25);
+    g.add(exhaust);
+  }
+
+  // Swept fin and high tailplane.
+  const fin = box(0.14, 2.1, 1.7, body, 0, 2.15, 4.15);
+  fin.rotation.x = 0.25;
+  g.add(fin);
+  g.add(box(4.4, 0.14, 1.25, wing, 0, 2.5, 4.35));
+
+  // Jets have no propeller — hand back an invisible stub for the spinner hook.
+  const prop = box(0.01, 0.01, 0.01, body, 0, 0, 0);
+  prop.visible = false;
 
   return { group: g, prop };
 }
