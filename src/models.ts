@@ -787,28 +787,41 @@ export function makeBirdFlock(): BirdFlock {
   return { group, wingsL, wingsR };
 }
 
-/** Railway: gravel bed, sleepers, and twin rails following the curve. */
+/** Railway: ballast bed, dense merged sleepers, and continuous curve-following rails. */
 export function makeRailway(params: RiverParams): THREE.Group {
   const g = new THREE.Group();
-  g.add(makeLaneStrip(params, 6, 0x6b5f52, 0.05));
-  for (let z = -RIVER_LEN / 2 + 60; z < RIVER_LEN / 2 - 60; z += 14) {
-    const dx6 = riverXAt(params, z + 3) - riverXAt(params, z - 3);
-    const tie = box(3.4, 0.06, 0.7, 0x4a3f33, riverXAt(params, z), 0.1, z);
-    tie.rotation.y = -Math.atan2(dx6, 6);
-    tie.castShadow = false;
-    g.add(tie);
-  }
-  // Rails stay off the sharply-curved end ramps where straight segments break up.
-  for (let z = -RIVER_LEN / 2 + 300; z < RIVER_LEN / 2 - 300; z += 14) {
-    const x0 = riverXAt(params, z);
-    const x1 = riverXAt(params, z + 14);
-    const yaw = -Math.atan2(x1 - x0, 14);
-    for (const side of [-1, 1]) {
-      const rail = box(0.18, 0.12, Math.hypot(x1 - x0, 14) + 0.8, 0x8a8d92, (x0 + x1) / 2 + side * 1.1, 0.16, z + 7);
-      rail.rotation.y = yaw;
-      rail.castShadow = false;
-      g.add(rail);
+  g.add(makeLaneStrip(params, 4.6, 0x7a7266, 0.04)); // ballast
+
+  // Sleepers as one merged mesh of flat quads following the path.
+  const positions: number[] = [];
+  const c = new THREE.Color(0x54463a);
+  const colors: number[] = [];
+  for (let z = -RIVER_LEN / 2 + 40; z < RIVER_LEN / 2 - 40; z += 5.5) {
+    const cx = riverXAt(params, z);
+    const dx = riverXAt(params, z + 3) - riverXAt(params, z - 3);
+    const len = Math.hypot(dx, 6);
+    const d = { x: dx / len, z: 6 / len };   // along the path
+    const n = { x: 6 / len, z: -dx / len };  // across the path
+    const A = 1.5;  // half-length across
+    const B = 0.28; // half-width along
+    const p = (sn: number, sd: number): number[] => [
+      cx + n.x * A * sn + d.x * B * sd, 0.08, z + n.z * A * sn + d.z * B * sd,
+    ];
+    const [pa, pb, pc, pd] = [p(-1, -1), p(-1, 1), p(1, 1), p(1, -1)];
+    for (const pt of [pa, pb, pc, pa, pc, pd]) {
+      positions.push(...pt);
+      colors.push(c.r, c.g, c.b);
     }
+  }
+  const tieGeo = new THREE.BufferGeometry();
+  tieGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  tieGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  tieGeo.computeVertexNormals();
+  g.add(new THREE.Mesh(tieGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })));
+
+  // Rails: two narrow ribbons riding the same curve, offset along the normal.
+  for (const side of [-1, 1]) {
+    g.add(makeLaneStrip(params, 0.3, 0x9aa0a6, 0.13, side * 1.1));
   }
   return g;
 }
@@ -1162,7 +1175,13 @@ export function riverXAt(p: RiverParams, relZ: number): number {
  * Edges are offset perpendicular to the local path direction so the lane
  * keeps a constant true width through every bend.
  */
-function makeLaneStrip(params: RiverParams, width: number, color: number, y: number): THREE.Mesh {
+function makeLaneStrip(
+  params: RiverParams,
+  width: number,
+  color: number,
+  y: number,
+  lateral = 0, // offset the whole ribbon sideways along the path normal (e.g. rails)
+): THREE.Mesh {
   const positions: number[] = [];
   const normals: number[] = [];
   const step = 18;
@@ -1178,15 +1197,17 @@ function makeLaneStrip(params: RiverParams, width: number, color: number, y: num
   };
   for (let z = -RIVER_LEN / 2; z < RIVER_LEN / 2; z += step) {
     const z1 = z + step;
-    const c0 = riverXAt(params, z);
-    const c1 = riverXAt(params, z1);
     const n0 = edgeNormal(z);
     const n1 = edgeNormal(z1);
+    const c0 = riverXAt(params, z) + n0.nx * lateral;
+    const cz0 = z + n0.nz * lateral;
+    const c1 = riverXAt(params, z1) + n1.nx * lateral;
+    const cz1 = z1 + n1.nz * lateral;
     const w0 = halfW(z);
     const w1 = halfW(z1);
     const quad = [
-      [c0 - n0.nx * w0, z - n0.nz * w0], [c1 - n1.nx * w1, z1 - n1.nz * w1], [c1 + n1.nx * w1, z1 + n1.nz * w1],
-      [c0 - n0.nx * w0, z - n0.nz * w0], [c1 + n1.nx * w1, z1 + n1.nz * w1], [c0 + n0.nx * w0, z + n0.nz * w0],
+      [c0 - n0.nx * w0, cz0 - n0.nz * w0], [c1 - n1.nx * w1, cz1 - n1.nz * w1], [c1 + n1.nx * w1, cz1 + n1.nz * w1],
+      [c0 - n0.nx * w0, cz0 - n0.nz * w0], [c1 + n1.nx * w1, cz1 + n1.nz * w1], [c0 + n0.nx * w0, cz0 + n0.nz * w0],
     ];
     for (const [x, zz] of quad) {
       positions.push(x, y, zz);
