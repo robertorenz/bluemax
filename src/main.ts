@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Game, type Hud } from './game';
 import {
   makePlane, ENEMY_FORMS, makeBlimp, makeBridge, makeFactory, makeTank,
-  makeShip, makeDepot, makeAAGun, makeCar, makeBuilding,
+  makeShip, makeDepot, makeAAGun, makeCar, makeBuilding, makeCastle,
 } from './models';
 import { PLANES, PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
 import {
@@ -83,6 +83,7 @@ const planeThumbs = makePlaneThumbs();
 
 /** Every scoreable target, best first, with a builder for its 3D thumbnail. */
 const SCORE_TABLE: { label: string; pts: number; build: () => THREE.Object3D }[] = [
+  { label: 'Castle', pts: 400, build: makeCastle },
   { label: 'Zeppelin', pts: 300, build: () => makeBlimp().group },
   { label: 'Enemy Triplane', pts: 150, build: () => makePlane(ENEMY_FORMS.tri, 0x9c3b34, 0xd0685c, 0xeed8d4).group },
   { label: 'Bridge', pts: 150, build: makeBridge },

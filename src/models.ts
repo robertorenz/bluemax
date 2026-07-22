@@ -586,11 +586,95 @@ export function makeRubble(): THREE.Group {
   return g;
 }
 
-export function makeBomb(): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.9, 3, 8), lambert(P.bomb));
-  m.rotation.x = Math.PI / 2;
-  m.castShadow = true;
-  return m;
+/** Proper aerial bomb: cylindrical body, ogive nose, tapered tail with fins.
+ *  Built nose-down (-y); rotate x by PI/2 to carry it level. */
+export function makeBomb(): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 1.15, 10), lambert(0x3a4046));
+  body.castShadow = true;
+  g.add(body);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.34, 10, 8), lambert(0x2f3540));
+  nose.position.y = -0.58;
+  nose.scale.y = 1.5;
+  nose.castShadow = true;
+  g.add(nose);
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.14, 10), lambert(0xd6b93a));
+  ring.position.y = -0.3;
+  g.add(ring);
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.16, 0.55, 10), lambert(0x4d5560));
+  tail.position.y = 0.85;
+  g.add(tail);
+  g.add(box(0.95, 0.5, 0.06, 0x4d5560, 0, 1.05, 0)); // fins
+  g.add(box(0.06, 0.5, 0.95, 0x4d5560, 0, 1.05, 0));
+  return g;
+}
+
+/** Whitewashed village cottage. */
+export function makeCottage(): THREE.Group {
+  const g = new THREE.Group();
+  const w = 4 + Math.random() * 2;
+  const h = 2.8 + Math.random() * 0.8;
+  const d = 4 + Math.random() * 2;
+  g.add(box(w, h, d, 0xd8d2c2, 0, h / 2, 0));
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(Math.max(w, d) * 0.75, 2, 4),
+    lambert(Math.random() < 0.5 ? 0x8a4a3a : 0x9a7d4a),
+  );
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = h + 1;
+  roof.castShadow = true;
+  g.add(roof);
+  g.add(box(1, 1.4, 0.15, 0x4a3c30, 0, 0.7, d / 2)); // door
+  return g;
+}
+
+/** Village church: whitewashed nave with a spired bell tower. */
+export function makeChurch(): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(5, 4, 9, 0xd8d2c2, 0, 2, 0.8));
+  const naveRoof = new THREE.Mesh(new THREE.ConeGeometry(4.4, 2.4, 4), lambert(0x6e5f47));
+  naveRoof.rotation.y = Math.PI / 4;
+  naveRoof.scale.z = 1.7;
+  naveRoof.position.set(0, 5.2, 0.8);
+  naveRoof.castShadow = true;
+  g.add(naveRoof);
+  g.add(box(2.6, 7.5, 2.6, 0xcfc8b8, 0, 3.75, -4.4)); // tower
+  const spire = new THREE.Mesh(new THREE.ConeGeometry(2, 3.2, 4), lambert(0x5a4a42));
+  spire.rotation.y = Math.PI / 4;
+  spire.position.set(0, 9.1, -4.4);
+  spire.castShadow = true;
+  g.add(spire);
+  return g;
+}
+
+/** Stone castle: curtain walls, corner towers with cone roofs, central keep. */
+export function makeCastle(): THREE.Group {
+  const g = new THREE.Group();
+  const stone = 0x8a8d92;
+  g.add(box(20, 5, 1.6, stone, 0, 2.5, -10));
+  g.add(box(20, 5, 1.6, stone, 0, 2.5, 10));
+  g.add(box(1.6, 5, 20, stone, -10, 2.5, 0));
+  g.add(box(1.6, 5, 20, stone, 10, 2.5, 0));
+  for (const tx of [-9.5, 9.5]) {
+    for (const tz of [-9.5, 9.5]) {
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.3, 8.5, 9), lambert(0x7e8186));
+      tower.position.set(tx, 4.25, tz);
+      tower.castShadow = true;
+      g.add(tower);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(2.7, 2.6, 9), lambert(0x5a4a42));
+      cap.position.set(tx, 9.8, tz);
+      cap.castShadow = true;
+      g.add(cap);
+    }
+  }
+  g.add(box(7, 9, 7, 0x6e7176, 0, 4.5, 0)); // keep
+  const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(5.4, 3, 4), lambert(0x5a4a42));
+  keepRoof.rotation.y = Math.PI / 4;
+  keepRoof.position.y = 10.5;
+  keepRoof.castShadow = true;
+  g.add(keepRoof);
+  g.add(box(3.2, 3.6, 1, 0x3a342c, 0, 1.8, 10.3)); // gate
+  return g;
 }
 
 export function makeBullet(color: number): THREE.Mesh {

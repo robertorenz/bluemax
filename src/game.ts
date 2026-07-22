@@ -5,6 +5,7 @@ import {
   makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
+  makeCottage, makeChurch, makeCastle,
   riverXAt, RIVER_LEN,
   type AAGunModel, type RiverParams, type PlaneShape,
 } from './models';
@@ -47,7 +48,7 @@ interface AirEnemy {
 
 type GroundKind =
   | 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot'
-  | 'river' | 'bridge' | 'ship' | 'road' | 'car';
+  | 'river' | 'bridge' | 'ship' | 'road' | 'car' | 'castle';
 
 /** Lane kinds share the long wandering-strip behavior. */
 const isLane = (k: GroundKind): boolean => k === 'river' || k === 'road';
@@ -76,6 +77,7 @@ const STRUCT_HIT: Partial<Record<GroundKind, { r: number; h: number }>> = {
   depot:    { r: 5, h: 3.6 },
   ship:     { r: 4, h: 4 },
   car:      { r: 2.2, h: 2.4 },
+  castle:   { r: 12, h: 11 },
 };
 
 const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: number }> = {
@@ -87,6 +89,7 @@ const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: numb
   bridge:   { hp: 2, score: 150, radius: 16 },
   ship:     { hp: 1, score: 100, radius: 14 },
   car:      { hp: 1, score: 60, radius: 12 },
+  castle:   { hp: 4, score: 400, radius: 22 },
   river:    { hp: 99, score: 0, radius: 0 },
   road:     { hp: 99, score: 0, radius: 0 },
   runway:   { hp: 99, score: 0, radius: 0 },
@@ -100,7 +103,7 @@ interface Bullet {
 }
 
 interface Bomb {
-  mesh: THREE.Mesh;
+  mesh: THREE.Group;
   vy: number;
   vz: number;
 }
@@ -116,6 +119,9 @@ interface Particle {
 interface Flash {
   mesh: THREE.Mesh;
   life: number;
+  maxLife: number;
+  maxScale: number;
+  opacity0: number;
 }
 
 export interface Hud {
@@ -186,6 +192,8 @@ export class Game {
   private nextRunwayAt = 0;
   private nextRiverAt = 0;
   private nextRoadAt = 0;
+  private nextVillageAt = 0;
+  private nextCastleAt = 0;
   private startedAt = 0;
 
   constructor(container: HTMLElement, private hud: Hud) {
@@ -434,6 +442,8 @@ export class Game {
     this.nextRunwayAt = this.now + 13000;
     this.nextRiverAt = this.now + 8000;
     this.nextRoadAt = this.now + 24000;
+    this.nextVillageAt = this.now + 30000;
+    this.nextCastleAt = this.now + 80000;
     this.startedAt = this.now;
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
@@ -590,6 +600,7 @@ export class Game {
       this.audio.bombWhistle(Math.sqrt((2 * Math.max(1, p.y)) / GRAVITY));
       const bomb = makeBomb();
       bomb.position.set(p.x, p.y - 0.8, p.z);
+      bomb.rotation.x = Math.PI / 2; // carried level, nose forward
       this.bombs.push({ mesh: bomb, vy: 0, vz: 0 });
       this.scene.add(bomb);
     }
@@ -695,6 +706,16 @@ export class Game {
         ? this.now + 40000 + Math.random() * 16000
         : this.now + 6000;
     }
+    if (this.now > this.nextVillageAt) {
+      this.nextVillageAt = this.spawnVillage()
+        ? this.now + 55000 + Math.random() * 35000
+        : this.now + 8000;
+    }
+    if (this.now > this.nextCastleAt) {
+      this.nextCastleAt = this.spawnCastle()
+        ? this.now + 140000 + Math.random() * 80000
+        : this.now + 10000;
+    }
   }
 
   private spawnEnemy(): void {
@@ -783,8 +804,41 @@ export class Game {
     );
   }
 
+  /** Village: a church surrounded by a loose cluster of cottages. */
+  private spawnVillage(): boolean {
+    const cx = (Math.random() - 0.5) * 44;
+    if (this.blocksRunwayLane('building', cx, 10)) return false;
+    const church = makeChurch();
+    church.position.set(cx, 0, -520);
+    this.scene.add(church);
+    this.groundObjs.push({ group: church, kind: 'building', hp: 2, fireAt: Infinity });
+    let placed = 1;
+    const count = 6 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < count; i++) {
+      const hx = cx + (Math.random() - 0.5) * 42;
+      if (Math.abs(hx) > 44 || this.blocksRunwayLane('building', hx)) continue;
+      const house = Math.random() < 0.7 ? makeCottage() : makeBuilding();
+      house.position.set(hx, 0, -498 - Math.random() * 85);
+      this.scene.add(house);
+      this.groundObjs.push({ group: house, kind: 'building', hp: 2, fireAt: Infinity });
+      placed++;
+    }
+    return placed >= 4;
+  }
+
+  /** Rare landmark fortress — the biggest prize on the map. */
+  private spawnCastle(): boolean {
+    const x = (Math.random() - 0.5) * 52;
+    if (this.blocksRunwayLane('building', x, 10)) return false;
+    const castle = makeCastle();
+    castle.position.set(x, 0, -515);
+    this.scene.add(castle);
+    this.groundObjs.push({ group: castle, kind: 'castle', hp: GROUND_STATS.castle.hp, fireAt: Infinity });
+    return true;
+  }
+
   /** True when placing here would collide with a runway or a lane's course. */
-  private blocksRunwayLane(kind: GroundKind, x: number): boolean {
+  private blocksRunwayLane(kind: GroundKind, x: number, extra = 0): boolean {
     for (const o of this.groundObjs) {
       if (isLane(o.kind) && o.river) {
         // Everything scrolls at the same speed, so a newly spawned object stays
@@ -795,10 +849,10 @@ export class Game {
         for (let dz = -halfSpan; dz <= halfSpan; dz += 15) {
           const r = rel + dz;
           if (Math.abs(r) > RIVER_LEN / 2) continue;
-          if (Math.abs(o.group.position.x + riverXAt(o.river, r) - x) < 24) return true;
+          if (Math.abs(o.group.position.x + riverXAt(o.river, r) - x) < 24 + extra) return true;
         }
       } else if ((kind === 'runway' || o.kind === 'runway') && o.kind !== 'river') {
-        if (o.group.position.z < -380 && Math.abs(o.group.position.x - x) < 18) return true;
+        if (o.group.position.z < -380 && Math.abs(o.group.position.x - x) < 18 + extra) return true;
       }
     }
     return false;
@@ -1067,7 +1121,7 @@ export class Game {
       const pos = b.mesh.position;
       pos.y += b.vy * dt;
       pos.z += b.vz * dt;
-      b.mesh.rotation.x = Math.PI / 2 + Math.min(1.2, -b.vy * 0.05); // nose over
+      b.mesh.rotation.x = Math.PI / 2 - Math.min(Math.PI / 2, -b.vy * 0.06); // noses over as it falls
 
       if (pos.y <= 0.4) {
         this.detonate(pos);
@@ -1078,7 +1132,7 @@ export class Game {
   }
 
   private detonate(at: THREE.Vector3): void {
-    this.explode(at, 26);
+    this.explode(at, 42, 11, true);
     for (const o of this.groundObjs) {
       if (o.kind === 'runway' || isLane(o.kind) || o.dead) continue;
       const pos = o.group.position;
@@ -1109,15 +1163,17 @@ export class Game {
   /** Destroyed: score it, then leave burning wreckage on the map instead of vanishing. */
   private destroyGroundObj(o: GroundObj): void {
     const pos = o.group.position;
-    this.explode(pos.clone().setY(2), o.kind === 'depot' ? 38 : 22);
+    const big = o.kind === 'depot' || o.kind === 'castle';
+    this.explode(pos.clone().setY(2), big ? 44 : 22, big ? 13 : 6, big);
     this.score += GROUND_STATS[o.kind].score;
     o.dead = true;
     o.damaged = true;
     o.fireAt = Infinity;
-    if (o.kind === 'building' || o.kind === 'factory') {
+    if (o.kind === 'building' || o.kind === 'factory' || o.kind === 'castle') {
       o.group.clear();
       const rubble = makeRubble();
       if (o.kind === 'factory') rubble.scale.set(1.7, 1, 1.3);
+      if (o.kind === 'castle') rubble.scale.set(2.6, 1.4, 2.6);
       o.group.add(rubble);
     } else if (o.kind === 'bridge') {
       o.group.clear();
@@ -1170,7 +1226,7 @@ export class Game {
     }
   }
 
-  private explode(at: THREE.Vector3, count: number): void {
+  private explode(at: THREE.Vector3, count: number, flashScale = 6, ring = false): void {
     this.audio.explosion(count >= 20);
     for (let i = 0; i < count; i++) {
       const s = 0.3 + Math.random() * 0.5;
@@ -1195,8 +1251,19 @@ export class Game {
       new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9 }),
     );
     flash.position.copy(at);
-    this.flashes.push({ mesh: flash, life: 0.32 });
+    this.flashes.push({ mesh: flash, life: 0.32, maxLife: 0.32, maxScale: flashScale, opacity0: 0.9 });
     this.scene.add(flash);
+
+    if (ring) {
+      // Expanding ground shockwave.
+      const wave = new THREE.Mesh(
+        new THREE.CylinderGeometry(1.2, 1.2, 0.1, 22),
+        new THREE.MeshBasicMaterial({ color: 0xd8c9a8, transparent: true, opacity: 0.5 }),
+      );
+      wave.position.set(at.x, 0.3, at.z);
+      this.flashes.push({ mesh: wave, life: 0.55, maxLife: 0.55, maxScale: 16, opacity0: 0.5 });
+      this.scene.add(wave);
+    }
   }
 
   private updateEffects(dt: number): void {
@@ -1223,9 +1290,9 @@ export class Game {
         this.flashes.splice(i, 1);
         continue;
       }
-      const t = 1 - f.life / 0.32;
-      f.mesh.scale.setScalar(1 + t * 5);
-      (f.mesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - t);
+      const t = 1 - f.life / f.maxLife;
+      f.mesh.scale.setScalar(1 + t * (f.maxScale - 1));
+      (f.mesh.material as THREE.MeshBasicMaterial).opacity = f.opacity0 * (1 - t);
     }
   }
 

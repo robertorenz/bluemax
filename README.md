@@ -68,6 +68,7 @@ appear automatically — drag the stick to steer and climb/dive.
 
 | Target | Points |
 |--------|--------|
+| Castle | 400 |
 | Zeppelin | 300 |
 | Enemy triplane | 150 |
 | Bridge | 150 |
