@@ -19,33 +19,40 @@ export interface PlaneModel {
   prop: THREE.Mesh;
 }
 
-export type PlaneType = 'eindecker' | 'camel' | 'dr1' | 'albatros' | 'p40';
+/** Geometry archetypes the whole hangar is built from. */
+export type PlaneShape = 'mono' | 'bi' | 'tri' | 'bisleek' | 'ww2';
 
 /**
  * Low-poly military plane, nose pointing toward -z (the direction of flight).
  * Origin sits at the fuselage centerline so altitude == group.position.y.
  */
-export function makePlane(type: PlaneType, body: number, wing: number, detail: number): PlaneModel {
+export function makePlane(
+  shape: PlaneShape,
+  body: number,
+  wing: number,
+  detail: number,
+  opts: { mouth?: boolean } = {},
+): PlaneModel {
   const g = new THREE.Group();
 
   g.add(box(1.1, 1.0, 5.2, body, 0, 0.9, 0));           // fuselage
 
-  if (type === 'eindecker') {
+  if (shape === 'mono') {
     g.add(box(10.5, 0.24, 2.2, wing, 0, 0.95, -0.6));    // single shoulder wing
-  } else if (type === 'camel') {
+  } else if (shape === 'bi') {
     g.add(box(9, 0.22, 1.9, wing, 0, 1.95, -0.7));       // upper wing
     g.add(box(8, 0.22, 1.7, wing, 0, 0.3, -0.6));        // lower wing
     for (const sx of [-3.1, -1.2, 1.2, 3.1]) {           // struts
       g.add(box(0.12, 1.6, 0.12, detail, sx, 1.1, -0.7));
     }
-  } else if (type === 'dr1') {
+  } else if (shape === 'tri') {
     g.add(box(7, 0.22, 1.6, wing, 0, 0.25, -0.55));      // bottom wing
     g.add(box(8.4, 0.22, 1.8, wing, 0, 1.4, -0.65));     // middle wing
     g.add(box(7.4, 0.22, 1.6, wing, 0, 2.55, -0.7));     // top wing
     for (const sx of [-2.6, -1.1, 1.1, 2.6]) {           // tall struts
       g.add(box(0.12, 2.3, 0.12, detail, sx, 1.4, -0.62));
     }
-  } else if (type === 'albatros') {
+  } else if (shape === 'bisleek') {
     // Sleek fighter: narrow staggered wings, single strut pair.
     g.add(box(9.4, 0.2, 1.7, wing, 0, 1.7, -0.85));      // upper wing, forward stagger
     g.add(box(8.4, 0.2, 1.5, wing, 0, 0.35, -0.45));     // lower wing
@@ -53,12 +60,14 @@ export function makePlane(type: PlaneType, body: number, wing: number, detail: n
       g.add(box(0.12, 1.35, 0.12, detail, sx, 1.0, -0.65));
     }
   } else {
-    // P-40: beefy low-wing monoplane with canopy and shark mouth.
+    // WWII-era: beefy low-wing monoplane with a closed canopy.
     g.add(box(1.3, 1.15, 6, body, 0, 0.95, 0.1));        // deeper fuselage
     g.add(box(11, 0.26, 2.5, wing, 0, 0.5, -0.3));       // low wing
     g.add(box(0.95, 0.55, 1.7, 0x2b3238, 0, 1.7, 0.4));  // canopy
-    g.add(box(0.95, 0.4, 1.2, 0xe8e4da, 0, 0.5, -2.35)); // shark teeth (white)
-    g.add(box(1.0, 0.14, 1.25, 0xa33226, 0, 0.5, -2.34)); // gum line (red)
+    if (opts.mouth) {
+      g.add(box(0.95, 0.4, 1.2, 0xe8e4da, 0, 0.5, -2.35));  // shark teeth (white)
+      g.add(box(1.0, 0.14, 1.25, 0xa33226, 0, 0.5, -2.34)); // gum line (red)
+    }
   }
 
   g.add(box(3.2, 0.15, 1.2, wing, 0, 1.0, 2.5));         // tailplane
@@ -90,7 +99,7 @@ export function makePlane(type: PlaneType, body: number, wing: number, detail: n
 
 /** Enemy planes default to classic biplanes. */
 export const makeBiplane = (body: number, wing: number, detail: number): PlaneModel =>
-  makePlane('camel', body, wing, detail);
+  makePlane('bi', body, wing, detail);
 
 /** Big slow zeppelin: ellipsoid hull, tail fins, gondola with a pusher prop. */
 export function makeBlimp(): PlaneModel {
@@ -241,15 +250,14 @@ export function riverXAt(p: RiverParams, relZ: number): number {
   return wander + p.sideIn * EDGE_PUSH * tIn + p.sideOut * EDGE_PUSH * tOut;
 }
 
-/** Meandering river strip, built as one vertex-strip mesh. */
-export function makeRiver(params: RiverParams): THREE.Group {
-  const g = new THREE.Group();
+/** Winding lane strip (river or road) built as one vertex-strip mesh. */
+function makeLaneStrip(params: RiverParams, width: number, color: number, y: number): THREE.Mesh {
   const positions: number[] = [];
   const normals: number[] = [];
   const step = 24;
-  // Ends taper to a point so the river doesn't cut off in a blunt square.
+  // Ends taper to a point so the lane doesn't cut off in a blunt square.
   const halfW = (z: number) =>
-    (RIVER_WIDTH / 2) *
+    (width / 2) *
     Math.max(0.05, Math.min((z + RIVER_LEN / 2) / 90, (RIVER_LEN / 2 - z) / 90, 1));
   for (let z = -RIVER_LEN / 2; z < RIVER_LEN / 2; z += step) {
     const c0 = riverXAt(params, z);
@@ -261,16 +269,46 @@ export function makeRiver(params: RiverParams): THREE.Group {
       [c0 - w0, z], [c1 + w1, z + step], [c0 + w0, z],
     ];
     for (const [x, zz] of quad) {
-      positions.push(x, 0.06, zz);
+      positions.push(x, y, zz);
       normals.push(0, 1, 0);
     }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x3d6b96 }));
+  const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color }));
   mesh.receiveShadow = true;
-  g.add(mesh);
+  return mesh;
+}
+
+export function makeRiver(params: RiverParams): THREE.Group {
+  const g = new THREE.Group();
+  g.add(makeLaneStrip(params, RIVER_WIDTH, 0x3d6b96, 0.06));
+  return g;
+}
+
+/** Country road: gray strip with a dashed centerline following the curve. */
+export function makeRoad(params: RiverParams): THREE.Group {
+  const g = new THREE.Group();
+  g.add(makeLaneStrip(params, 10, 0x6b6f72, 0.07));
+  for (let z = -RIVER_LEN / 2 + 80; z < RIVER_LEN / 2 - 80; z += 46) {
+    const dx = riverXAt(params, z + 3) - riverXAt(params, z - 3);
+    const dash = box(0.5, 0.04, 4, 0xd8d8d2, riverXAt(params, z), 0.13, z);
+    dash.rotation.y = -Math.atan2(dx, 6);
+    dash.castShadow = false;
+    g.add(dash);
+  }
+  return g;
+}
+
+/** Small military truck for road traffic. */
+export function makeCar(): THREE.Group {
+  const g = new THREE.Group();
+  const colors = [0x51602f, 0x6b4a3a, 0x4a5560, 0x7a6a45];
+  const c = colors[Math.floor(Math.random() * colors.length)];
+  g.add(box(1.6, 1.0, 3.4, c, 0, 0.75, 0.5));          // cargo body
+  g.add(box(1.4, 0.55, 1.2, c, 0, 0.5, -1.6));         // hood
+  g.add(box(1.25, 0.5, 0.8, 0x2b3238, 0, 1.05, -1.4)); // cab glass
   return g;
 }
 

@@ -4,36 +4,24 @@ import { P } from './palette';
 import {
   makePlane, makeBlimp, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeRubble, makeFactory, makeTank, makeDepot,
-  makeRiver, makeBridge, makeBrokenBridge, makeShip, riverXAt, RIVER_LEN,
-  type AAGunModel, type RiverParams, type PlaneType,
+  makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, riverXAt, RIVER_LEN,
+  type AAGunModel, type RiverParams, type PlaneShape,
 } from './models';
+import { PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
 
 export type { PlaneType };
-
-/** The hangar: handling, armament, and livery per airframe. */
-const PLANE_INFO: Record<PlaneType, {
-  steer: number; climb: number; dive: number;
-  bombs: number; gunMs: number;
-  body: number; wing: number; detail: number;
-}> = {
-  eindecker: { steer: 58, climb: 11.5, dive: 20, bombs: 30, gunMs: 150, body: 0xb8a878, wing: 0xd6c79a, detail: 0x6b5f47 },
-  camel:     { steer: 48, climb: 14.5, dive: 17, bombs: 30, gunMs: 150, body: 0x5d6b3f, wing: 0x8a9460, detail: 0xd8e4ee },
-  dr1:       { steer: 38, climb: 17.5, dive: 15, bombs: 30, gunMs: 150, body: 0x4a6d8c, wing: 0x7fa8c9, detail: 0xd8e4ee },
-  albatros:  { steer: 52, climb: 13,   dive: 19, bombs: 24, gunMs: 125, body: 0x6e7f6a, wing: 0x9aa98e, detail: 0x3c4a3a },
-  p40:       { steer: 55, climb: 15,   dive: 21, bombs: 36, gunMs: 115, body: 0x55663f, wing: 0x6b7c4d, detail: 0xd8e4ee },
-};
 
 type EnemyKind = 'bi' | 'mono' | 'tri' | 'blimp';
 
 const ENEMY_INFO: Record<EnemyKind, {
   hp: number; score: number; hitR: number;
-  shape: PlaneType | 'blimp';
+  shape: PlaneShape | 'blimp';
   body: number; wing: number;
 }> = {
-  bi:    { hp: 2, score: 100, hitR: 4.2, shape: 'camel',     body: 0x8c4a45, wing: 0xc47a6e },
-  mono:  { hp: 1, score: 120, hitR: 4.2, shape: 'eindecker', body: 0x5a5f66, wing: 0x7d838c },
-  tri:   { hp: 3, score: 150, hitR: 4.2, shape: 'dr1',       body: 0x9c3b34, wing: 0xd0685c },
-  blimp: { hp: 7, score: 300, hitR: 10,  shape: 'blimp',     body: 0, wing: 0 },
+  bi:    { hp: 2, score: 100, hitR: 4.2, shape: 'bi',    body: 0x8c4a45, wing: 0xc47a6e },
+  mono:  { hp: 1, score: 120, hitR: 4.2, shape: 'mono',  body: 0x5a5f66, wing: 0x7d838c },
+  tri:   { hp: 3, score: 150, hitR: 4.2, shape: 'tri',   body: 0x9c3b34, wing: 0xd0685c },
+  blimp: { hp: 7, score: 300, hitR: 10,  shape: 'blimp', body: 0, wing: 0 },
 };
 import { makeChunk, CHUNK_D, CHUNK_COUNT } from './terrain';
 
@@ -58,7 +46,10 @@ interface AirEnemy {
 
 type GroundKind =
   | 'building' | 'aagun' | 'runway' | 'factory' | 'tank' | 'depot'
-  | 'river' | 'bridge' | 'ship';
+  | 'river' | 'bridge' | 'ship' | 'road' | 'car';
+
+/** Lane kinds share the long wandering-strip behavior. */
+const isLane = (k: GroundKind): boolean => k === 'river' || k === 'road';
 
 interface GroundObj {
   group: THREE.Group;
@@ -83,6 +74,7 @@ const STRUCT_HIT: Partial<Record<GroundKind, { r: number; h: number }>> = {
   tank:     { r: 2.8, h: 3 },
   depot:    { r: 5, h: 3.6 },
   ship:     { r: 4, h: 4 },
+  car:      { r: 2.2, h: 2.4 },
 };
 
 const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: number }> = {
@@ -93,7 +85,9 @@ const GROUND_STATS: Record<GroundKind, { hp: number; score: number; radius: numb
   depot:    { hp: 1, score: 100, radius: 18 },
   bridge:   { hp: 2, score: 150, radius: 16 },
   ship:     { hp: 1, score: 100, radius: 14 },
+  car:      { hp: 1, score: 60, radius: 12 },
   river:    { hp: 99, score: 0, radius: 0 },
+  road:     { hp: 99, score: 0, radius: 0 },
   runway:   { hp: 99, score: 0, radius: 0 },
 };
 
@@ -138,7 +132,7 @@ export class Game {
   onGameOver: (reason: string, score: number) => void = () => {};
 
   private audio = new AudioFx();
-  private planeType: PlaneType = 'camel';
+  private planeType: PlaneType = DEFAULT_PLANE;
   private maxBombs = 30;
   private mode: 'flying' | 'landing' | 'takeoff' = 'flying';
   private speedFactor = 1;
@@ -175,6 +169,7 @@ export class Game {
   private nextGroundAt = 0;
   private nextRunwayAt = 0;
   private nextRiverAt = 0;
+  private nextRoadAt = 0;
   private startedAt = 0;
 
   constructor(container: HTMLElement, private hud: Hud) {
@@ -263,12 +258,12 @@ export class Game {
 
   /** Swap the player's airframe; safe to call from the menu for a live preview. */
   choosePlane(type: PlaneType): void {
-    this.planeType = type;
-    const info = PLANE_INFO[type];
-    this.maxBombs = info.bombs;
+    const def = PLANE_MAP[type] ?? PLANE_MAP[DEFAULT_PLANE];
+    this.planeType = def.id;
+    this.maxBombs = def.bombs;
     const pos = this.player?.position.clone();
     if (this.player) this.scene.remove(this.player);
-    const { group, prop } = makePlane(type, info.body, info.wing, info.detail);
+    const { group, prop } = makePlane(def.shape, def.body, def.wing, def.detail, { mouth: def.mouth });
     group.position.copy(pos ?? new THREE.Vector3(0, this.alt, PLAYER_Z));
     group.scale.setScalar(1.25); // offset the extra camera distance
     this.player = group;
@@ -277,7 +272,10 @@ export class Game {
   }
 
   private bindInput(): void {
+    const typing = (e: KeyboardEvent) =>
+      (e.target as HTMLElement | null)?.tagName === 'INPUT';
     window.addEventListener('keydown', (e) => {
+      if (typing(e)) return;
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
       this.keys.add(e.key.length === 1 ? e.key.toLowerCase() : e.key);
     });
@@ -285,6 +283,7 @@ export class Game {
       this.keys.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key);
     });
     window.addEventListener('keydown', (e) => {
+      if (typing(e)) return;
       if (e.key.toLowerCase() === 'm' && !e.repeat) this.audio.toggleMute();
     });
   }
@@ -317,6 +316,7 @@ export class Game {
     this.nextGroundAt = this.now + 800;
     this.nextRunwayAt = this.now + 13000;
     this.nextRiverAt = this.now + 8000;
+    this.nextRoadAt = this.now + 24000;
     this.startedAt = this.now;
     this.player.position.set(0, this.alt, PLAYER_Z);
     this.player.visible = true;
@@ -404,7 +404,7 @@ export class Game {
       return;
     }
 
-    const stats = PLANE_INFO[this.planeType];
+    const stats = PLANE_MAP[this.planeType] ?? PLANE_MAP[DEFAULT_PLANE];
     let bank = 0;
     let pitch = 0;
 
@@ -560,7 +560,12 @@ export class Game {
     }
     if (this.now > this.nextRiverAt) {
       this.nextRiverAt = this.spawnRiver()
-        ? this.now + 36000 + Math.random() * 14000
+        ? this.now + 40000 + Math.random() * 16000
+        : this.now + 6000;
+    }
+    if (this.now > this.nextRoadAt) {
+      this.nextRoadAt = this.spawnRoad()
+        ? this.now + 40000 + Math.random() * 16000
         : this.now + 6000;
     }
   }
@@ -578,7 +583,7 @@ export class Game {
     const { group, prop } =
       kind === 'blimp'
         ? makeBlimp()
-        : makePlane(info.shape as PlaneType, info.body, info.wing, 0xeed8d4);
+        : makePlane(info.shape as PlaneShape, info.body, info.wing, 0xeed8d4);
 
     const alt = kind === 'blimp' ? 22 + Math.random() * 12 : 6 + Math.random() * 30;
     if (fromBehind) {
@@ -644,10 +649,17 @@ export class Game {
     return true;
   }
 
-  /** True when placing here would collide with a runway or a river's course. */
+  /** True when another long lane (river/road) still overlaps the spawn horizon. */
+  private laneBusy(): boolean {
+    return this.groundObjs.some(
+      (o) => isLane(o.kind) && o.group.position.z - RIVER_LEN / 2 < -480,
+    );
+  }
+
+  /** True when placing here would collide with a runway or a lane's course. */
   private blocksRunwayLane(kind: GroundKind, x: number): boolean {
     for (const o of this.groundObjs) {
-      if (o.kind === 'river' && o.river) {
+      if (isLane(o.kind) && o.river) {
         // Everything scrolls at the same speed, so a newly spawned object stays
         // aligned with the river section sharing its spawn z forever — check
         // the course at exactly that section (plus the object's z extent).
@@ -667,12 +679,7 @@ export class Game {
 
   /** Long meandering river with bridges where it crosses the corridor, and barges. */
   private spawnRiver(): boolean {
-    // Never two rivers side by side at the spawn horizon.
-    if (this.groundObjs.some(
-      (o) => o.kind === 'river' && o.group.position.z - RIVER_LEN / 2 < -480,
-    )) {
-      return false;
-    }
+    if (this.laneBusy()) return false;
     const params: RiverParams = {
       amp: 60 + Math.random() * 70,
       waveLen: 500 + Math.random() * 400,
@@ -715,6 +722,43 @@ export class Game {
       this.groundObjs.push({
         group: ship, kind: 'ship', hp: GROUND_STATS.ship.hp, fireAt: Infinity,
         host: river, vz: (Math.random() < 0.5 ? -1 : 1) * (4 + Math.random() * 5),
+      });
+    }
+    return true;
+  }
+
+  /** Country road with truck traffic running both directions. */
+  private spawnRoad(): boolean {
+    if (this.laneBusy()) return false;
+    const params: RiverParams = {
+      amp: 40 + Math.random() * 55,
+      waveLen: 620 + Math.random() * 380,
+      phase: Math.random() * Math.PI * 2,
+      amp2: 6 + Math.random() * 9,
+      waveLen2: 150 + Math.random() * 120,
+      phase2: Math.random() * Math.PI * 2,
+      sideIn: Math.random() < 0.5 ? -1 : 1,
+      sideOut: Math.random() < 0.5 ? -1 : 1,
+    };
+    const baseX = (Math.random() - 0.5) * 30;
+    const group = makeRoad(params);
+    const centerZ = -500 - RIVER_LEN / 2;
+    group.position.set(baseX, 0, centerZ);
+    this.scene.add(group);
+    const road: GroundObj = { group, kind: 'road', hp: 99, fireAt: Infinity, river: params };
+    this.groundObjs.push(road);
+
+    const carCount = 4 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < carCount; i++) {
+      const rz = (Math.random() - 0.5) * (RIVER_LEN - 300);
+      const car = makeCar();
+      car.position.set(baseX + riverXAt(params, rz), 0, centerZ + rz);
+      this.scene.add(car);
+      this.groundObjs.push({
+        group: car, kind: 'car', hp: GROUND_STATS.car.hp, fireAt: Infinity,
+        host: road,
+        // Alternate direction so traffic runs both ways.
+        vz: (i % 2 === 0 ? 1 : -1) * (9 + Math.random() * 6),
       });
     }
     return true;
@@ -783,15 +827,17 @@ export class Game {
         o.group.rotation.y = o.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
       }
 
-      // Barges follow their river's course, turning back near its ends.
-      if (o.kind === 'ship' && o.host?.river && o.vz && !o.damaged) {
+      // Barges and trucks follow their lane's course, turning back near its ends.
+      if ((o.kind === 'ship' || o.kind === 'car') && o.host?.river && o.vz && !o.damaged) {
         pos.z += o.vz * dt;
         const rel = pos.z - o.host.group.position.z;
         if (Math.abs(rel) > RIVER_LEN / 2 - 130) o.vz = -o.vz;
-        pos.x = o.host.group.position.x + riverXAt(o.host.river, rel);
-        // Point the bow along the local course direction.
+        // Trucks keep to their side of the road.
+        const laneOffset = o.kind === 'car' ? (o.vz > 0 ? 2 : -2) : 0;
+        pos.x = o.host.group.position.x + riverXAt(o.host.river, rel) + laneOffset;
+        // Point the nose along the local course direction.
         const dzs = o.vz > 0 ? 6 : -6;
-        const dx = o.host.group.position.x + riverXAt(o.host.river, rel + dzs) - pos.x;
+        const dx = o.host.group.position.x + riverXAt(o.host.river, rel + dzs) + laneOffset - pos.x;
         o.group.rotation.y = Math.atan2(-dx, -dzs);
       }
 
@@ -826,7 +872,7 @@ export class Game {
         }
       }
 
-      if (pos.z > (o.kind === 'river' ? RIVER_LEN / 2 + 200 : 140)) {
+      if (pos.z > (isLane(o.kind) ? RIVER_LEN / 2 + 200 : 140)) {
         this.scene.remove(o.group);
         this.groundObjs.splice(i, 1);
       }
@@ -907,7 +953,7 @@ export class Game {
   private detonate(at: THREE.Vector3): void {
     this.explode(at, 26);
     for (const o of this.groundObjs) {
-      if (o.kind === 'runway' || o.kind === 'river' || o.dead) continue;
+      if (o.kind === 'runway' || isLane(o.kind) || o.dead) continue;
       const pos = o.group.position;
       const dist = Math.hypot(pos.x - at.x, pos.z - at.z);
       if (dist >= GROUND_STATS[o.kind].radius) continue;

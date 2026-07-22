@@ -9,16 +9,16 @@ models are built procedurally from primitives (zero external assets).
 
 ## Gameplay
 
-Pick your airframe on the title screen — the choice is remembered between visits,
-and each handles differently:
+**Career progression:** every point you score adds to your career XP, which
+unlocks new aircraft. The hangar holds 15 classics spanning 1915–1944 — you start
+with the Fokker Eindecker, Sopwith Camel, and Fokker Dr.I, and work up through the
+Albatros D.III, SPAD S.XIII, Sopwith Triplane, Bristol F.2, Fokker D.VII,
+P-26 Peashooter, Gloster Gladiator, Polikarpov I-16, Spitfire Mk I, Bf 109 E,
+P-40 Flying Tiger, and finally the P-51 Mustang at 50,000 XP. Later aircraft
+steer faster, dive harder, and shoot quicker.
 
-| Airframe | Year | Character |
-|----------|------|-----------|
-| Fokker Eindecker | 1915 | Fastest steering, weak climb, dives hard |
-| Sopwith Camel | 1917 | Balanced and agile |
-| Fokker Dr.I | 1917 | Superb climb, slow steering |
-| Albatros D.III | 1917 | Quick guns (125 ms), light bomb load (24) |
-| P-40 Flying Tiger | 1941 | Best all-round: fast guns, 36 bombs, shark mouth |
+**High scores:** a top-10 table with arcade-style 3-letter initials, kept in your
+browser. The HUD shows your all-time best.
 
 Enemy air traffic is mixed too: biplanes (100 pts), fast monoplanes (120 pts),
 tough triplanes (150 pts), and huge slow **zeppelins** (300 pts, 7 hits) that lob
@@ -48,9 +48,10 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
   while you're on the ground and the camera banks with your turns in flight.
 - **Damage states** — a direct bomb hit flattens a target; a near miss leaves it
   charred, smoking, and out of action. Wreckage stays on the map instead of vanishing.
-- **Rivers** — long meandering rivers arrive from the distance, wander across the
-  corridor and off to the sides (and back), crossed by bombable bridges and
-  patrolled by barges that steam along the bends.
+- **Rivers & roads** — long meandering rivers and country roads arrive from the
+  distance, wander across the corridor and off to the sides (and back). Rivers
+  carry bombable bridges and barges; roads carry truck convoys driving both
+  directions, keeping to their side of the road.
 - **Limited ordnance** — you carry 30 bombs; the ground crew rearms you during a
   landing rollout alongside refueling.
 - **Solid structures** — flying into a building, factory, tank, depot, or ship is
@@ -73,6 +74,7 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
 | Ship (river barge) | 100 |
 | Fuel depot | 100 |
 | AA gun | 75 |
+| Truck | 60 |
 | Building | 50 |
 
 ## Development
