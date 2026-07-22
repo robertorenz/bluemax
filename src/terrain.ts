@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeTree } from './models';
+import { makeTree, makeCow, makeSheep } from './models';
 
 export const CHUNK_D = 240; // depth (z) of one terrain chunk
 export const CHUNK_COUNT = 4;
@@ -158,6 +158,28 @@ export function makeChunk(biome: Biome = 'farmland'): THREE.Group {
       -CHUNK_D / 2 + Math.random() * CHUNK_D,
     );
     group.add(tree);
+  }
+
+  // Livestock herds graze the open country.
+  const herdCount =
+    biome === 'meadow' ? 3 + Math.floor(Math.random() * 2) :
+    biome === 'farmland' ? 2 + Math.floor(Math.random() * 2) :
+    biome === 'steppe' ? 1 + Math.floor(Math.random() * 2) : 0;
+  for (let h = 0; h < herdCount; h++) {
+    const sheep = Math.random() < 0.45;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const hx = side * (30 + Math.random() * 240);
+    const hz = -CHUNK_D / 2 + 20 + Math.random() * (CHUNK_D - 40);
+    const animals = 3 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < animals; i++) {
+      const animal = sheep ? makeSheep() : makeCow();
+      animal.position.set(
+        hx + (Math.random() - 0.5) * 14,
+        0,
+        hz + (Math.random() - 0.5) * 14,
+      );
+      group.add(animal);
+    }
   }
 
   return group;

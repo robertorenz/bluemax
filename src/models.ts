@@ -705,6 +705,38 @@ export function makeWindmill(): AAGunModel {
   return { group: g, barrel: sails };
 }
 
+/** Holstein cow: white body with dark patches, head down grazing. */
+export function makeCow(): THREE.Group {
+  const g = new THREE.Group();
+  const s = 0.9 + Math.random() * 0.35;
+  g.add(box(0.85 * s, 0.55 * s, 1.5 * s, 0xe3ded2, 0, 0.6 * s, 0));
+  // patches
+  g.add(box(0.87 * s, 0.3 * s, 0.5 * s, 0x3a342c, 0, 0.62 * s, -0.3 * s));
+  g.add(box(0.87 * s, 0.25 * s, 0.4 * s, 0x3a342c, 0, 0.55 * s, 0.45 * s));
+  // head, lowered to graze
+  g.add(box(0.35 * s, 0.4 * s, 0.5 * s, 0xe3ded2, 0, 0.42 * s, -0.95 * s));
+  // legs
+  for (const [lx, lz] of [[-0.3, -0.55], [0.3, -0.55], [-0.3, 0.55], [0.3, 0.55]]) {
+    g.add(box(0.14 * s, 0.35 * s, 0.14 * s, 0xd6d0c2, lx * s, 0.17 * s, lz * s));
+  }
+  g.rotation.y = Math.random() * Math.PI * 2;
+  return g;
+}
+
+/** Woolly sheep: puffy white body, dark face. */
+export function makeSheep(): THREE.Group {
+  const g = new THREE.Group();
+  const s = 0.75 + Math.random() * 0.25;
+  const wool = new THREE.Mesh(new THREE.SphereGeometry(0.5 * s, 8, 6), lambert(0xeeeae0));
+  wool.scale.set(1, 0.85, 1.4);
+  wool.position.y = 0.5 * s;
+  wool.castShadow = true;
+  g.add(wool);
+  g.add(box(0.22 * s, 0.24 * s, 0.3 * s, 0x3a342c, 0, 0.42 * s, -0.72 * s)); // face
+  g.rotation.y = Math.random() * Math.PI * 2;
+  return g;
+}
+
 export interface BirdFlock {
   group: THREE.Group;
   wingsL: THREE.Group[];
