@@ -6,6 +6,7 @@ import {
   makeCloud, makeBirdFlock, makeRubble, makeFactory, makeTank, makeDepot,
   makeRiver, makeRoad, makeCar, makeBridge, makeBrokenBridge, makeShip, makeLightning,
   makeCottage, makeChurch, makeCastle, makeHill, makeRollingHill, makeWindmill, makeCanyon, makeLake,
+  RIVER_WIDTH,
   makeRailway, makeLocomotive, makeTrainCar, makeBalloon, makeEnemyBomber,
   makeHangar, makeControlTower, makeLighthouse, makeWarship, makeSearchBeam,
   canyonTaper, CANYON_WIDTH, CANYON_WALL_H,
@@ -1585,9 +1586,32 @@ export class Game {
         o.barrel.rotation.z += 1.1 * dt;
       }
 
-      // Tanks patrol laterally until knocked out.
+      // Tanks patrol laterally until knocked out; they can't swim, so rivers
+      // block them unless a bridge spans their path (which they drive across).
       if (o.kind === 'tank' && o.vx && !o.damaged) {
-        pos.x += o.vx * dt;
+        const nextX = pos.x + o.vx * dt;
+        let blocked = false;
+        let onBridge = false;
+        for (const lane of this.groundObjs) {
+          if (lane.kind !== 'river' || !lane.river) continue;
+          const rel = pos.z - lane.group.position.z;
+          if (Math.abs(rel) > RIVER_LEN / 2) continue;
+          const waterX = lane.group.position.x + riverXAt(lane.river, rel);
+          if (Math.abs(nextX - waterX) < RIVER_WIDTH / 2 + 1.5) {
+            const bridge = this.groundObjs.some(
+              (b) =>
+                b.kind === 'bridge' && !b.dead &&
+                Math.abs(b.group.position.z - pos.z) < 5 &&
+                Math.abs(b.group.position.x - nextX) < 16,
+            );
+            if (bridge) onBridge = true;
+            else blocked = true;
+            break;
+          }
+        }
+        if (blocked) o.vx = -o.vx;
+        else pos.x = nextX;
+        pos.y = onBridge ? 3.35 : 0; // ride the bridge deck
         if (Math.abs(pos.x) > 42) o.vx = -o.vx;
         o.group.rotation.y = o.vx > 0 ? -Math.PI / 2 : Math.PI / 2;
       }
@@ -1801,6 +1825,17 @@ export class Game {
     } else if (o.kind === 'bridge') {
       o.group.clear();
       o.group.add(makeBrokenBridge());
+      // Two for one: anything crossing goes down with the bridge.
+      for (const t of this.groundObjs) {
+        if (
+          t.kind === 'tank' && !t.dead &&
+          Math.abs(t.group.position.z - pos.z) < 5 &&
+          Math.abs(t.group.position.x - pos.x) < 16
+        ) {
+          this.destroyGroundObj(t);
+          t.group.position.y = 0; // dropped into the river
+        }
+      }
     } else {
       // Tanks, guns, and depots burn out in place.
       o.group.traverse((child) => {

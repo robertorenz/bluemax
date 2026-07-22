@@ -1087,13 +1087,72 @@ export function makeRunway(): THREE.Group {
   return g;
 }
 
-/** Random tree: pine, broadleaf, poplar, or bush. */
+/** Desert cactus: saguaro with arms, or a squat barrel cactus. */
+export function makeCactus(): THREE.Group {
+  const g = new THREE.Group();
+  const greens = [0x4a7a40, 0x558a4a, 0x3f6b38];
+  const green = greens[Math.floor(Math.random() * greens.length)];
+  if (Math.random() < 0.25) {
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.9 + Math.random() * 0.5, 9), lambert(green));
+    barrel.position.y = 0.5;
+    barrel.castShadow = true;
+    g.add(barrel);
+    return g;
+  }
+  const h = 2.2 + Math.random() * 1.8;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.32, h, 8), lambert(green));
+  trunk.position.y = h / 2;
+  trunk.castShadow = true;
+  g.add(trunk);
+  const arms = 1 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < arms; i++) {
+    const side = i === 0 ? (Math.random() < 0.5 ? -1 : 1) : (i % 2 === 0 ? 1 : -1);
+    const ay = h * (0.35 + Math.random() * 0.25);
+    const elbow = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.7, 7), lambert(green));
+    elbow.rotation.z = Math.PI / 2;
+    elbow.position.set(side * 0.5, ay, 0);
+    g.add(elbow);
+    const up = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, h * 0.4, 7), lambert(green));
+    up.position.set(side * 0.82, ay + h * 0.2, 0);
+    up.castShadow = true;
+    g.add(up);
+  }
+  return g;
+}
+
+/** Random tree: pine, broadleaf, poplar, bush, birch, or dead snag. */
 export function makeTree(): THREE.Group {
   const g = new THREE.Group();
   const s = 0.8 + Math.random() * 0.7;
   const kind = Math.random();
 
-  if (kind >= 0.9) {
+  if (kind >= 0.94) {
+    // Dead snag: bare trunk with skeletal branches.
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.3, 2.6 * s, 6), lambert(0x5b4a3a));
+    trunk.position.y = 1.3 * s;
+    trunk.castShadow = true;
+    g.add(trunk);
+    for (const side of [-1, 1]) {
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 1.2 * s, 5), lambert(0x5b4a3a));
+      branch.rotation.z = side * 0.7;
+      branch.position.set(side * 0.4 * s, 2.1 * s, 0);
+      g.add(branch);
+    }
+    return g;
+  }
+  if (kind >= 0.84) {
+    // Birch: pale trunk, light airy foliage.
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 1.8 * s, 6), lambert(0xdfe0da));
+    trunk.position.y = 0.9 * s;
+    g.add(trunk);
+    const top = new THREE.Mesh(new THREE.SphereGeometry(1.1 * s, 7, 5), lambert(0x8fae6a));
+    top.scale.y = 1.25;
+    top.position.y = 2.4 * s;
+    top.castShadow = true;
+    g.add(top);
+    return g;
+  }
+  if (kind >= 0.76) {
     // Low bush, no trunk.
     const bush = new THREE.Mesh(new THREE.SphereGeometry(1.3 * s, 7, 5), lambert(0x3d5c33));
     bush.scale.y = 0.6;
@@ -1107,13 +1166,13 @@ export function makeTree(): THREE.Group {
   trunk.position.y = 0.65;
   g.add(trunk);
 
-  if (kind < 0.4) {
+  if (kind < 0.34) {
     // Pine.
     const top = new THREE.Mesh(new THREE.ConeGeometry(1.7 * s, 3.4 * s, 7), lambert(P.treeTop));
     top.position.y = 1.2 + 1.7 * s;
     top.castShadow = true;
     g.add(top);
-  } else if (kind < 0.72) {
+  } else if (kind < 0.6) {
     // Broadleaf: a cluster of leafy blobs.
     const shades = [0x3f6b32, 0x4a7a3a, 0x35592b];
     for (let i = 0; i < 3; i++) {

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { makeTree, makeCow, makeSheep } from './models';
+import { makeTree, makeCactus, makeCow, makeSheep } from './models';
 
 export const CHUNK_D = 240; // depth (z) of one terrain chunk
 export const CHUNK_COUNT = 4;
@@ -157,10 +157,11 @@ export function makeChunk(biome: Biome = 'farmland'): THREE.Group {
     biome === 'forest' ? 48 + Math.floor(Math.random() * 18) :
     biome === 'alpine' ? 9 + Math.floor(Math.random() * 6) :
     biome === 'meadow' ? 3 + Math.floor(Math.random() * 4) :
-    biome === 'steppe' ? 2 + Math.floor(Math.random() * 3) :
+    biome === 'steppe' ? 4 + Math.floor(Math.random() * 5) :
     7 + Math.floor(Math.random() * 5);
   for (let i = 0; i < treeCount; i++) {
-    const tree = makeTree();
+    // The dry steppe grows cacti instead of trees.
+    const tree = biome === 'steppe' && Math.random() < 0.8 ? makeCactus() : makeTree();
     // On the coast everything living stays on the landward (east) side.
     const side = biome === 'coast' ? 1 : Math.random() < 0.5 ? -1 : 1;
     const minX = biome === 'forest' ? 32 : 48;
