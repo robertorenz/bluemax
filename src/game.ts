@@ -561,7 +561,12 @@ export class Game {
     });
     window.addEventListener('keydown', (e) => {
       if (typing(e)) return;
-      if (e.key.toLowerCase() === 'm' && !e.repeat) this.audio.toggleMute();
+      if (e.key.toLowerCase() === 'm' && !e.repeat) {
+        this.showAlert(this.audio.toggleSfx() ? '🔇 SOUND FX MUTED' : '🔊 SOUND FX ON');
+      }
+      if (e.key.toLowerCase() === 'n' && !e.repeat) {
+        this.showAlert(this.audio.toggleMusic() ? '🔇 MUSIC MUTED' : '🎵 MUSIC ON');
+      }
       if (e.key.toLowerCase() === 'p' && !e.repeat && this.state === 'playing') this.togglePhoto();
     });
   }

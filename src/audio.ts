@@ -27,6 +27,9 @@ const midiHz = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 export class AudioFx {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
+  private sfx!: GainNode;
+  private sfxMuted = localStorage.getItem('bluemax-mute-sfx') === '1';
+  private musicMuted = localStorage.getItem('bluemax-mute-music') === '1';
   private engineGain!: GainNode;
   private engineFilter!: BiquadFilterNode;
   private engineOscA!: OscillatorNode;
@@ -51,6 +54,11 @@ export class AudioFx {
     this.master.gain.value = this.muted ? 0 : 0.5;
     this.master.connect(ctx.destination);
 
+    // Separate buses: sound effects vs music, each independently mutable.
+    this.sfx = ctx.createGain();
+    this.sfx.gain.value = this.sfxMuted ? 0 : 1;
+    this.sfx.connect(this.master);
+
     // One second of white noise, reused by guns and explosions.
     this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const data = this.noise.getChannelData(0);
@@ -71,7 +79,7 @@ export class AudioFx {
     this.engineOscA.connect(this.engineFilter);
     this.engineOscB.connect(this.engineFilter);
     this.engineFilter.connect(this.engineGain);
-    this.engineGain.connect(this.master);
+    this.engineGain.connect(this.sfx);
     this.engineOscA.start();
     this.engineOscB.start();
 
@@ -84,7 +92,7 @@ export class AudioFx {
     rainLp.frequency.value = 950;
     this.rainGain = ctx.createGain();
     this.rainGain.gain.value = 0;
-    rainSrc.connect(rainLp).connect(this.rainGain).connect(this.master);
+    rainSrc.connect(rainLp).connect(this.rainGain).connect(this.sfx);
     rainSrc.start();
   }
 
@@ -95,7 +103,7 @@ export class AudioFx {
     if (!this.ctx || this.musicOn) return;
     this.musicOn = true;
     this.musicGain = this.ctx.createGain();
-    this.musicGain.gain.value = 0.5;
+    this.musicGain.gain.value = this.musicMuted ? 0 : 0.5;
     this.musicGain.connect(this.master);
     this.nextNoteTime = this.ctx.currentTime + 0.15;
     window.setInterval(() => this.scheduleMusic(), 200);
@@ -220,7 +228,7 @@ export class AudioFx {
     g.gain.exponentialRampToValueAtTime(0.5, t + 0.09);
     g.gain.exponentialRampToValueAtTime(0.14, t + 1.0);
     g.gain.exponentialRampToValueAtTime(0.001, t + 2.8);
-    src.connect(lp).connect(g).connect(this.master);
+    src.connect(lp).connect(g).connect(this.sfx);
     src.start(t, Math.random() * 0.5);
     src.stop(t + 3);
 
@@ -231,7 +239,7 @@ export class AudioFx {
     const sg = ctx.createGain();
     sg.gain.setValueAtTime(0.38, t);
     sg.gain.exponentialRampToValueAtTime(0.001, t + 1.3);
-    sub.connect(sg).connect(this.master);
+    sub.connect(sg).connect(this.sfx);
     sub.start(t);
     sub.stop(t + 1.4);
   }
@@ -259,7 +267,7 @@ export class AudioFx {
     const g = ctx.createGain();
     g.gain.setValueAtTime(0.28, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
-    src.connect(bp).connect(g).connect(this.master);
+    src.connect(bp).connect(g).connect(this.sfx);
     src.start(t, Math.random() * 0.8);
     src.stop(t + 0.1);
   }
@@ -279,7 +287,7 @@ export class AudioFx {
     const g = ctx.createGain();
     g.gain.setValueAtTime(big ? 0.65 : 0.38, t);
     g.gain.exponentialRampToValueAtTime(0.001, t + (big ? 0.8 : 0.5));
-    src.connect(lp).connect(g).connect(this.master);
+    src.connect(lp).connect(g).connect(this.sfx);
     src.start(t, Math.random() * 0.5);
     src.stop(t + 1);
 
@@ -290,7 +298,7 @@ export class AudioFx {
     const tg = ctx.createGain();
     tg.gain.setValueAtTime(big ? 0.55 : 0.32, t);
     tg.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-    thump.connect(tg).connect(this.master);
+    thump.connect(tg).connect(this.sfx);
     thump.start(t);
     thump.stop(t + 0.45);
   }
@@ -308,9 +316,25 @@ export class AudioFx {
     g.gain.exponentialRampToValueAtTime(0.09, t + Math.min(0.15, dur * 0.3));
     g.gain.setValueAtTime(0.09, t + dur * 0.85);
     g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    o.connect(g).connect(this.master);
+    o.connect(g).connect(this.sfx);
     o.start(t);
     o.stop(t + dur + 0.05);
+  }
+
+  /** Toggle just the sound effects; returns the new muted state. */
+  toggleSfx(): boolean {
+    this.sfxMuted = !this.sfxMuted;
+    localStorage.setItem('bluemax-mute-sfx', this.sfxMuted ? '1' : '0');
+    if (this.ctx && this.sfx) this.sfx.gain.value = this.sfxMuted ? 0 : 1;
+    return this.sfxMuted;
+  }
+
+  /** Toggle just the music; returns the new muted state. */
+  toggleMusic(): boolean {
+    this.musicMuted = !this.musicMuted;
+    localStorage.setItem('bluemax-mute-music', this.musicMuted ? '1' : '0');
+    if (this.musicGain) this.musicGain.gain.value = this.musicMuted ? 0 : 0.5;
+    return this.musicMuted;
   }
 
   toggleMute(): boolean {

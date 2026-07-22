@@ -38,7 +38,8 @@ automatically. Touch down early on the runway for a longer rollout and a fuller 
 | ↑ ↓ | Climb / dive (altitude) |
 | SPACE | Machine guns (they overheat — watch the GUNS bar) |
 | B | Drop bombs (hold to walk a stick of bombs across a target) |
-| M | Mute sound |
+| M | Mute sound effects |
+| N | Mute music |
 | F | Fullscreen |
 
 On phones and tablets a **virtual joystick** (left) and fire/bomb buttons (right)
