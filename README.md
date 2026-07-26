@@ -107,6 +107,24 @@ night — when AA searchlights sweep the sky, lock onto you, and shoot faster.
 | Truck | 60 |
 | Building | 50 |
 
+## The 8-bit version
+
+[`x16/`](x16/) holds a second, independent take on the same game: a ground-up
+**65C02 assembly** port for the [Commander X16](https://www.commanderx16.com/),
+the machine Blue Max would have been written for. None of the TypeScript carries
+over — only the design.
+
+It runs a diagonally scrolling VERA tile layer for the landscape, 55 sprites for
+everything that moves, the KERNAL text layer as a transparent HUD, and the VERA
+PSG for engine, guns, explosions and a three-voice theme. Terrain is generated on
+the fly from a permutation hash, so the world is endless out of a 64×64 map. As
+with the 3D version there are no external assets: every tile, sprite and palette
+entry is drawn by a generator script.
+
+Grab [`x16/BLUEMAX.PRG`](x16/BLUEMAX.PRG) and run it in
+[x16-emulator](https://github.com/X16Community/x16-emulator) or on real hardware.
+See [`x16/README.md`](x16/README.md) for controls and build instructions.
+
 ## Development
 
 ```bash
