@@ -1,8 +1,5 @@
 # Blue Max 3D — Commander X16
 
-**Status: work in progress.** The renderer is done and working; the game logic
-layered on top still has bugs. See *Known issues* below.
-
 A third take on Blue Max, aiming at the look of the
 [Three.js version](../README.md) rather than the isometric
 [x16 port](../x16/README.md): sky and horizon up top, the ground falling away in
@@ -48,16 +45,25 @@ Depth for entities comes from the same curve, via a 256-entry reciprocal table:
 
 Objects past `FAR_ROW` swap to half-size art so they shrink with distance.
 
-## Known issues
+## Bugs this shook out
 
-- The player's aeroplane sprite renders only partially in some frames; the
-  shadow beside it is always correct, so this is not the image data or the
-  palette. Under investigation.
-- Ground targets spawn and project but are not reliably visible.
-- Landing on a runway is implemented but untested.
-- `PERSP`/`DMIN` in `tools/bands.cjs` still need tuning: perspective naturally
-  crowds distant objects into a few rows near the horizon, which is correct but
-  leaves a short window in which targets are actually attackable.
+Three of these produced the same misleading symptom — the player's aeroplane
+rendering partially or not at all — which is worth recording, because the
+obvious suspect (the raster handler) was innocent every time:
+
+- `depth_row` ends with `ldx tmpa` to index the projection table, clobbering
+  `.X`. Every entity loop holds its index in `.X` across that call, so ground
+  targets wrote their state and their *sprite attributes* at random indices —
+  some of them past the end of the attribute buffer and into other variables.
+  It is now register-safe, as `spr_put`, `spr_hide`, `fx_spawn` and `rand`
+  already were.
+- `world_reset` never cleared the flak and cloud active-flags. Uninitialised
+  BSS meant phantom entities drawn from garbage image ids on the first frame.
+- `proj` cleared the carry between the low and high byte of a 16-bit subtract,
+  so every target projected to a nonsense screen column and got culled.
+
+Also fixed: bombs exploded at the aeroplane's altitude-adjusted row instead of
+the ground line, and `bomb_update` let `bomb_vs_ground` clobber its loop index.
 
 ## Controls
 

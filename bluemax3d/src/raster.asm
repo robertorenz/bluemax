@@ -138,7 +138,10 @@ wait_vsync:
 ; depth_row -- world depth `zrel` (16-bit, 0..1023) -> screen row in .A
 ; Carry set when the object is off the bottom of the screen.
 ; ---------------------------------------------------------------------------
+; Preserves .X -- every caller reaches this from inside an entity loop that is
+; using .X as its index, and the table lookup below needs the register.
 depth_row:
+        phx
         lda zrel+1                      ; index = zrel >> 2, full 16-bit shift
         sta tmpa+1
         lda zrel
@@ -153,7 +156,9 @@ depth_row:
         lda rowtab,x
         cmp #240
         bcs @off
+        plx
         clc
         rts
-@off:   sec
+@off:   plx
+        sec
         rts

@@ -16,18 +16,18 @@
         .include "data/gfx.inc"
         .segment "CODE"
 
-SPD_FLY   = 3                           ; world pixels forward per frame
+SPD_FLY   = 2                           ; world pixels forward per frame
 SPD_ROLL  = 1
 
-MAXOBJ    = 16
+MAXOBJ    = 14
 MAXAIR    = 4
 MAXSHOT   = 6
 MAXBOMB   = 3
 MAXFLAK   = 6
 MAXFX     = 5
-MAXCLOUD  = 4
+MAXCLOUD  = 3
 
-OBJ_RATE  = 14
+OBJ_RATE  = 16
 AIR_RATE  = 160
 CLOUD_RATE = 90
 

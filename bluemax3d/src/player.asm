@@ -338,8 +338,10 @@ player_draw:
         clc
         adc #I_PLANE_C
         sta pimg
-        lda #Z_AIR
+        lda #Z_TOP
         sta pz
         lda #SL_PLAYER
         jsr spr_put
         rts
+
+

@@ -28,6 +28,7 @@ NSLOTS    = SL_SHADOW + 1
 Z_OFF     = 0
 Z_GROUND  = 2
 Z_AIR     = 2
+Z_TOP     = 3                           ; in front of the HUD layer too
 
 ; ---------------------------------------------------------------------------
 ; spr_init -- zero all 128 hardware sprites.

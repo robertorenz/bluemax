@@ -201,7 +201,9 @@ function rearPlane(o) {
   } = o;
   const c = new Canvas(w, h);
   const cx = w >> 1, cy = h >> 1;
-  const tilt = bank * 2;
+  // Seen from behind, banking right drops the RIGHT wing, so a positive roll
+  // has to lower the right-hand end of each wing, not the left.
+  const tilt = -bank * 2;
 
   // lower wing
   if (biplane) {

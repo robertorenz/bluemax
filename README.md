@@ -125,6 +125,14 @@ Grab [`x16/BLUEMAX.PRG`](x16/BLUEMAX.PRG) and run it in
 [x16-emulator](https://github.com/X16Community/x16-emulator) or on real hardware.
 See [`x16/README.md`](x16/README.md) for controls and build instructions.
 
+[`bluemax3d/`](bluemax3d/) is a second X16 build that goes after *this* game's
+look instead: sky and horizon, the ground falling away in perspective, and the
+aeroplane seen from behind with its shadow tracking underneath. VERA has no
+Mode 7, so the perspective is done with raster bands — the vertical scroll is
+rewritten on every band so each screen row samples the tilemap at a different
+depth. Run [`bluemax3d/BLUEMAX3D.PRG`](bluemax3d/BLUEMAX3D.PRG); details in
+[`bluemax3d/README.md`](bluemax3d/README.md).
+
 ## Development
 
 ```bash

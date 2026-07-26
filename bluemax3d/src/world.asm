@@ -24,7 +24,13 @@ K_TREE    = 8
 K_WRECK   = 9
 
 FAR_ROW   = 108                         ; above this, use the half-size sprite
-Z_SPAWN   = 480                         ; world depth new things appear at
+; VERA gives the sprite renderer 798 cycles per scanline. Perspective crams
+; every distant target into the few rows below the horizon, and a pile of them
+; on one line blows that budget -- which silently drops sprites, including the
+; player's. They are a couple of pixels tall up there anyway, so don't draw
+; them until they are worth looking at.
+NEAR_ROW  = 88
+Z_SPAWN   = 460                         ; world depth new things appear at
 Z_GONE    = 20                          ; and where they drop off the bottom
 
 k_img:    .byte 0, I_BLDG, I_FACTORY, I_AAGUN, I_DEPOT, I_TRUCK, I_TANK
@@ -64,8 +70,16 @@ world_reset:
 :       stz bm_a,x
         dex
         bpl :-
+        ldx #MAXFLAK-1
+:       stz fl_a,x
+        dex
+        bpl :-
         ldx #MAXFX-1
 :       stz fx_a,x
+        dex
+        bpl :-
+        ldx #MAXCLOUD-1
+:       stz cl_a,x
         dex
         bpl :-
         stz spawn_t
@@ -210,7 +224,15 @@ obj_update:
         sta obj_t,x
         jsr flak_fire
 
-@draw:  ldy obj_k,x
+@draw:  lda prow
+        cmp #NEAR_ROW                   ; still a speck on the horizon
+        bcs :+
+        txa
+        clc
+        adc #SL_OBJ
+        jsr spr_hide
+        jmp @next
+:       ldy obj_k,x
         lda prow
         cmp #FAR_ROW
         bcs :+
@@ -641,12 +663,14 @@ bomb_update:
         lda bm_x,x
         sta ex
         stz ex+1
-        lda ply_row
+        lda #PLY_GROUND                 ; impact is on the deck, not at our height
         sta ey
         stz ey+1
-        jsr fx_spawn
+        phx                             ; bomb_vs_ground walks the target list
+        jsr fx_spawn                    ; with .X, so save the bomb index
         jsr sfx_boom
         jsr bomb_vs_ground
+        plx
         txa
         clc
         adc #SL_BOMB
@@ -655,7 +679,7 @@ bomb_update:
 @draw:  lda bm_x,x
         sta px
         stz px+1
-        lda ply_row
+        lda #PLY_GROUND                 ; falls from our altitude down to the deck
         sec
         sbc bm_alt,x
         sta py
