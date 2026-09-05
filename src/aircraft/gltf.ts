@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { environment } from './skins';
 import type { PlaneModel } from './types';
 
 /**
@@ -81,7 +82,17 @@ export function upgradeToRealModel(id: string, model: PlaneModel): void {
       target.z - centre.z + (entry.z ?? 0),
     );
     inst.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.castShadow = true;
+      if (!(o instanceof THREE.Mesh)) return;
+      o.castShadow = true;
+      // Give downloaded PBR materials the same sky to reflect as the procedural skins.
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) {
+        if (m instanceof THREE.MeshStandardMaterial && !m.envMap) {
+          m.envMap = environment();
+          m.envMapIntensity = 0.6;
+          m.needsUpdate = true;
+        }
+      }
     });
     model.group.add(inst);
     model.group.userData.realModel = true;

@@ -125,10 +125,20 @@ falls back to the procedural build.
 Free, downloadable, Creative Commons models exist on Sketchfab for every plane
 in the hangar; `public/models/manifest.example.json` lists one suggestion per
 aircraft with its source link (mostly CC-BY, one CC0 — credit the authors if
-you redistribute). Sketchfab needs a (free) account to download: open the link,
-choose *Download 3D model → glTF*, unzip, save the `.glb` under
-`public/models/` with the file name from the manifest, then rename
-`manifest.example.json` to `manifest.json`.
+you redistribute). The workflow:
+
+1. Sign in to Sketchfab (a free account is required to download).
+2. Open a link from the example manifest and click **Download 3D Model → glTF**.
+   You get a zip containing `scene.gltf`, `scene.bin` and a `textures` folder.
+3. Extract the zip, and move that folder into `public/models/` renamed to the
+   hangar id, e.g. `public/models/spitfire/scene.gltf`. (A single `.glb` saved
+   as `public/models/spitfire.glb` works too.)
+4. Run `npm run models`. It writes `public/models/manifest.json` for every
+   model folder it finds, carrying over the source credits.
+5. `npm run dev`, switch **MODELS** to Photoreal, pick the plane. If it flies
+   backwards, set that entry's `"rotY"` to `3.1416` in `manifest.json` and
+   reload; `scale`, `x`, `y`, `z` fine-tune the fit.
+6. Commit `public/models/` and push — the Pages workflow deploys it.
 
 ## Scoring
 

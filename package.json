@@ -1,12 +1,13 @@
 {
   "name": "bluemax",
   "version": "0.1.0",
-  "description": "BlueMax — a modernized homage to the 1983 Synapse isometric biplane shooter",
+  "description": "BlueMax \u2014 a modernized homage to the 1983 Synapse isometric biplane shooter",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "models": "node scripts/models.mjs"
   },
   "devDependencies": {
     "@types/three": "^0.185.1",
