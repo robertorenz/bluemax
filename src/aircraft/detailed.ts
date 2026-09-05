@@ -269,6 +269,7 @@ function halfWing(spec: WingSpec, o: WingOpts): WingHalf {
     pivot.position.copy(hIn);
     const dir = hOut.clone().sub(hIn).multiplyScalar(o.side).normalize();
     pivot.quaternion.setFromUnitVectors(X, dir);
+    pivot.userData.base = pivot.quaternion.clone();
     group.add(pivot);
     group.add(mesh);
     group.updateMatrixWorld(true);
@@ -338,6 +339,7 @@ function buildFin(
   pivot.position.set(post.x, post.y + bottom.y, post.z + bottom.zH);
   const dir = V(0, topR.y - bottom.y, topR.zH - bottom.zH).normalize();
   pivot.quaternion.setFromUnitVectors(Y, dir);
+  pivot.userData.base = pivot.quaternion.clone();
   g.add(pivot);
   g.add(rudderMesh);
   g.updateMatrixWorld(true);

@@ -73,6 +73,18 @@ function disposeGroup(group: THREE.Group): void {
   });
 }
 
+const HINGE_X = new THREE.Vector3(1, 0, 0);
+const HINGE_Y = new THREE.Vector3(0, 1, 0);
+const hingeQ = new THREE.Quaternion();
+
+/** Rotate a control surface about its hinge, on top of the hinge's own alignment. */
+function deflect(p: THREE.Object3D, axis: THREE.Vector3, angle: number): void {
+  const base = p.userData.base as THREE.Quaternion | undefined;
+  hingeQ.setFromAxisAngle(axis, angle);
+  if (base) p.quaternion.copy(base).multiply(hingeQ);
+  else p.quaternion.copy(hingeQ);
+}
+
 /** Flicker exhaust and jet flames around their built scale. */
 function flickerFlames(a: PlaneModel): void {
   for (const f of a.flames ?? []) {
@@ -94,10 +106,10 @@ function dressEnemy(parts: PlaneModel): PlaneModel {
 function animateEnemyParts(a: PlaneModel, wobble: number): void {
   flickerFlames(a);
   const s = Math.sin(wobble);
-  for (const p of a.rudders ?? []) p.rotation.y = s * 0.12;
-  for (const p of a.aileronsL ?? []) p.rotation.x = -s * 0.15;
-  for (const p of a.aileronsR ?? []) p.rotation.x = s * 0.15;
-  for (const p of a.elevators ?? []) p.rotation.x = Math.cos(wobble * 0.7) * 0.08;
+  for (const p of a.rudders ?? []) deflect(p, HINGE_Y, s * 0.12);
+  for (const p of a.aileronsL ?? []) deflect(p, HINGE_X, -s * 0.15);
+  for (const p of a.aileronsR ?? []) deflect(p, HINGE_X, s * 0.15);
+  for (const p of a.elevators ?? []) deflect(p, HINGE_X, Math.cos(wobble * 0.7) * 0.08);
 }
 
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
@@ -848,10 +860,10 @@ export class Game {
     c.rud = THREE.MathUtils.damp(c.rud, -steer * 0.3, 10, dt);
     c.yaw = THREE.MathUtils.damp(c.yaw, this.player.rotation.z * 0.35, 2.2, dt);
     c.flex = THREE.MathUtils.damp(c.flex, pitchIn * 0.035, 5, dt);
-    for (const p of a.aileronsL ?? []) p.rotation.x = -c.ail;
-    for (const p of a.aileronsR ?? []) p.rotation.x = c.ail;
-    for (const p of a.elevators ?? []) p.rotation.x = c.elev;
-    for (const p of a.rudders ?? []) p.rotation.y = c.rud;
+    for (const p of a.aileronsL ?? []) deflect(p, HINGE_X, -c.ail);
+    for (const p of a.aileronsR ?? []) deflect(p, HINGE_X, c.ail);
+    for (const p of a.elevators ?? []) deflect(p, HINGE_X, c.elev);
+    for (const p of a.rudders ?? []) deflect(p, HINGE_Y, c.rud);
     for (const w of a.wingHalves ?? []) {
       w.rotation.z = (w.userData.baseRz as number) + (w.userData.side as number) * c.flex;
     }

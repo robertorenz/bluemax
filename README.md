@@ -117,10 +117,13 @@ describe them in `public/models/manifest.json`, keyed by hangar id
 { "spitfire": { "file": "spitfire.glb", "rotY": 3.1416 } }
 ```
 
-A loaded model is fitted automatically: scaled so its wingspan matches the
-procedural airframe and centred on it. Set `rotY` (radians) if the nose does
-not point toward −z, and `scale`, `x`, `y`, `z` to fine-tune. Anything missing
-falls back to the procedural build.
+A loaded model is fitted automatically: its wingspan is laid along x, the nose
+turned toward −z (the fin is taken as the tall end), then it is scaled to the
+procedural airframe's span and centred on it. If the guess is wrong, add
+`rotY` (radians) to the entry — `3.1416` for backwards, `1.5708` or `-1.5708`
+for sideways — and `scale`, `x`, `y`, `z` to fine-tune. Anything missing falls
+back to the procedural build. The swap happens when the download finishes, so a
+big model appears a few seconds into the first flight.
 
 Free, downloadable, Creative Commons models exist on Sketchfab for every plane
 in the hangar; `public/models/manifest.example.json` lists one suggestion per
