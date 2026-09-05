@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Nation } from './types';
+import type { Nation, Livery } from './types';
 
 /** Material fidelity: detailed = clean painted finish, photoreal = weathered PBR skins. */
 export type Tier = 'detailed' | 'photoreal';
@@ -28,6 +28,8 @@ export interface SkinOpts {
   finChord: number;
   finHeight: number;
   finHinge: number; // chord fraction where the rudder starts
+  /** Historical paint scheme (photoreal only). */
+  livery?: Livery;
 }
 
 export interface SkinSet {
@@ -142,15 +144,19 @@ function normalFromHeight(hc: CanvasRenderingContext2D, W: number, H: number, st
 
 // ---------------------------------------------------------------- paint primitives
 
-function base(c: Canvas, color: RGB, tier: Tier): void {
+/** Base coat: the historical livery in photoreal, otherwise the plane's solid colour; then weathering. */
+function paintPart(c: Canvas, part: 'wing' | 'body' | 'fin', o: SkinOpts): void {
+  const color = rgb(part === 'wing' ? o.wing : o.body);
   const { ctx, W, H } = c;
-  ctx.fillStyle = css(color);
-  ctx.fillRect(0, 0, W, H);
-  if (tier !== 'photoreal') return;
-  // Mottled, sun-faded paint: overlapping soft blobs a few percent lighter and darker.
-  for (let i = 0; i < 140; i++) {
-    const f = 0.9 + rnd() * 0.2;
-    ctx.fillStyle = css(shade(color, f), 0.14);
+  if (!(o.tier === 'photoreal' && paintLivery(c, part, o))) {
+    ctx.fillStyle = css(color);
+    ctx.fillRect(0, 0, W, H);
+  }
+  if (o.tier !== 'photoreal') return;
+  // Sun-faded, mottled paint: soft blobs a few percent lighter and darker.
+  for (let i = 0; i < 160; i++) {
+    const f = 0.86 + rnd() * 0.28;
+    ctx.fillStyle = `rgba(${f > 1 ? 255 : 0},${f > 1 ? 255 : 0},${f > 1 ? 255 : 0},${Math.abs(f - 1) * 0.9})`;
     ctx.beginPath();
     ctx.ellipse(rnd() * W, rnd() * H, 20 + rnd() * 90, 12 + rnd() * 60, rnd() * Math.PI, 0, Math.PI * 2);
     ctx.fill();
@@ -159,7 +165,7 @@ function base(c: Canvas, color: RGB, tier: Tier): void {
   const img = ctx.getImageData(0, 0, W, H);
   const d = img.data;
   for (let i = 0; i < d.length; i += 4) {
-    const n = (rnd() - 0.5) * 14;
+    const n = (rnd() - 0.5) * 16;
     d[i] += n; d[i + 1] += n; d[i + 2] += n;
   }
   ctx.putImageData(img, 0, 0);
@@ -188,7 +194,7 @@ function ribs(c: Canvas, spacing: number, horizontal: boolean, from: number, to:
 /** Panel lines with rivet rows for stressed-skin airframes. */
 function panels(c: Canvas, xs: number[], ys: number[], rivets: boolean): void {
   const { ctx, W, H } = c;
-  ctx.fillStyle = 'rgba(0,0,0,0.28)';
+  ctx.fillStyle = c.h ? 'rgba(0,0,0,0.45)' : 'rgba(0,0,0,0.28)';
   for (const x of xs) ctx.fillRect(x * W, 0, 1.5, H);
   for (const y of ys) ctx.fillRect(0, y * H, W, 1.5);
   if (c.h) {
@@ -197,7 +203,7 @@ function panels(c: Canvas, xs: number[], ys: number[], rivets: boolean): void {
     for (const y of ys) c.h.fillRect(0, y * H - 1, W, 3);
   }
   if (!rivets) return;
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
   const dot = (x: number, y: number) => {
     ctx.fillRect(x, y, 2, 2);
     if (c.h) { c.h.fillStyle = '#9a9a9a'; c.h.fillRect(x - 1, y - 1, 3, 3); }
@@ -320,13 +326,360 @@ function chips(c: Canvas, x0: number, y0: number, x1: number, y1: number, n: num
   }
 }
 
+// ---------------------------------------------------------------- liveries (photoreal)
+
+type Rect = [number, number, number, number]; // x0, y0, x1, y1 in canvas pixels
+
+const K = {
+  cdl: [201, 185, 143] as RGB,
+  pc10: [90, 82, 54] as RGB,
+  turquoise: [106, 154, 138] as RGB,
+  streakOlive: [70, 82, 50] as RGB,
+  lozUpper: [[63, 86, 112], [79, 106, 72], [106, 77, 95], [138, 123, 74], [107, 111, 122]] as RGB[],
+  lozLower: [[154, 167, 184], [183, 176, 138], [201, 169, 164], [159, 184, 144], [185, 194, 201]] as RGB[],
+  ply: [165, 131, 79] as RGB,
+  olive: [107, 114, 72] as RGB,
+  mauve: [122, 107, 124] as RGB,
+  fr: [[191, 174, 122], [127, 143, 90], [79, 95, 63], [126, 90, 58], [43, 43, 43]] as RGB[],
+  darkEarth: [108, 91, 63] as RGB,
+  darkGreen: [61, 74, 52] as RGB,
+  sky: [180, 191, 160] as RGB,
+  codeGrey: [176, 182, 178] as RGB,
+  rlm71: [60, 74, 61] as RGB,
+  rlm02: [127, 138, 106] as RGB,
+  rlm65: [143, 164, 179] as RGB,
+  rlmYellow: [216, 183, 58] as RGB,
+  rlm81: [91, 79, 67] as RGB,
+  rlm82: [90, 107, 62] as RGB,
+  rlm76: [159, 176, 182] as RGB,
+  od: [92, 90, 60] as RGB,
+  odFade: [116, 112, 78] as RGB,
+  neutralGrey: [139, 143, 140] as RGB,
+  alu: [200, 204, 208] as RGB,
+  seaBlue: [43, 62, 85] as RGB,
+  midBlue: [94, 119, 145] as RGB,
+  navyWhite: [220, 223, 224] as RGB,
+  amt4: [76, 107, 63] as RGB,
+  amt7: [126, 161, 184] as RGB,
+};
+
+function fillRect(c: Canvas, r: Rect, col: RGB): void {
+  c.ctx.fillStyle = css(col);
+  c.ctx.fillRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
+}
+
+function clipped(c: Canvas, r: Rect, fn: () => void): void {
+  const { ctx } = c;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
+  ctx.clip();
+  fn();
+  ctx.restore();
+}
+
+/** One wobbly organic blob. */
+function blobPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number): void {
+  const n = 12;
+  const pts: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    const k = 0.65 + rnd() * 0.7;
+    pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+  }
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n];
+    const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+    if (i === 0) ctx.moveTo(mx, my);
+    else ctx.quadraticCurveTo(p[0], p[1], mx, my);
+  }
+  const p = pts[0], q = pts[1];
+  ctx.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2);
+  ctx.closePath();
+}
+
+/** Disruptive camouflage: large soft-edged patches of `col` over whatever is underneath. */
+function blobs(c: Canvas, r: Rect, col: RGB, n: number, size: number, alpha = 1): void {
+  clipped(c, r, () => {
+    const w = r[2] - r[0], h = r[3] - r[1];
+    c.ctx.fillStyle = css(col, alpha);
+    for (let i = 0; i < n; i++) {
+      blobPath(c.ctx, r[0] + rnd() * w, r[1] + rnd() * h, w * size * (0.6 + rnd() * 0.8), h * size * (0.6 + rnd() * 0.8));
+      c.ctx.fill();
+    }
+  });
+}
+
+/** Angular splinter pattern (Luftwaffe RLM 70/71 style). */
+function splinter(c: Canvas, r: Rect, cols: RGB[]): void {
+  clipped(c, r, () => {
+    const w = r[2] - r[0], h = r[3] - r[1];
+    fillRect(c, r, cols[0]);
+    c.ctx.fillStyle = css(cols[1]);
+    for (let i = 0; i < 9; i++) {
+      const x = r[0] + rnd() * w, y = r[1] + rnd() * h;
+      c.ctx.beginPath();
+      c.ctx.moveTo(x, y);
+      c.ctx.lineTo(x + (rnd() - 0.3) * w * 0.9, y + (rnd() - 0.5) * h * 0.25);
+      c.ctx.lineTo(x + (rnd() - 0.5) * w * 0.7, y + (rnd() + 0.2) * h * 0.5);
+      c.ctx.lineTo(x + (rnd() - 0.7) * w * 0.6, y + (rnd() - 0.2) * h * 0.4);
+      c.ctx.closePath();
+      c.ctx.fill();
+    }
+  });
+}
+
+/** Printed lozenge fabric: staggered rows of hexagons in the given palette. */
+function lozenge(c: Canvas, r: Rect, cols: RGB[], size: number): void {
+  clipped(c, r, () => {
+    const dx = size * 1.5, dy = size * 0.87;
+    for (let row = -1, y = r[1]; y < r[3] + size; y += dy, row++) {
+      for (let x = r[0] - size + (row % 2 ? dx * 0.5 : 0); x < r[2] + size; x += dx) {
+        c.ctx.fillStyle = css(cols[Math.floor(rnd() * cols.length)]);
+        c.ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2;
+          c.ctx.lineTo(x + Math.cos(a) * size * 0.58, y + Math.sin(a) * size * 0.58);
+        }
+        c.ctx.closePath();
+        c.ctx.fill();
+      }
+    }
+  });
+}
+
+/** Brush-streaked dope (Fokker style): long diagonal strokes over the base. */
+function streaks(c: Canvas, r: Rect, col: RGB, n: number, along: 'x' | 'y'): void {
+  clipped(c, r, () => {
+    const w = r[2] - r[0], h = r[3] - r[1];
+    c.ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      c.ctx.strokeStyle = css(col, 0.35 + rnd() * 0.4);
+      c.ctx.lineWidth = 2 + rnd() * 5;
+      const x = r[0] + rnd() * w, y = r[1] + rnd() * h;
+      const len = (along === 'x' ? w : h) * (0.08 + rnd() * 0.2);
+      const tilt = (rnd() - 0.5) * 0.5;
+      c.ctx.beginPath();
+      c.ctx.moveTo(x, y);
+      if (along === 'x') c.ctx.lineTo(x + len, y + len * tilt);
+      else c.ctx.lineTo(x + len * tilt, y + len);
+      c.ctx.stroke();
+    }
+  });
+}
+
+/** Varnished plywood: warm base with long grain lines and panel tone shifts. */
+function woodgrain(c: Canvas, r: Rect, base: RGB): void {
+  fillRect(c, r, base);
+  clipped(c, r, () => {
+    const w = r[2] - r[0], h = r[3] - r[1];
+    for (let i = 0; i < 5; i++) {
+      c.ctx.fillStyle = css(shade(base, 0.9 + rnd() * 0.2), 0.5);
+      c.ctx.fillRect(r[0], r[1] + (i / 5) * h, w, h / 5);
+    }
+    for (let i = 0; i < 90; i++) {
+      c.ctx.strokeStyle = css(shade(base, 0.6 + rnd() * 0.3), 0.18 + rnd() * 0.2);
+      c.ctx.lineWidth = 1 + rnd() * 1.5;
+      const x = r[0] + rnd() * w;
+      c.ctx.beginPath();
+      c.ctx.moveTo(x, r[1]);
+      c.ctx.bezierCurveTo(x + (rnd() - 0.5) * 12, r[1] + h * 0.33, x + (rnd() - 0.5) * 12, r[1] + h * 0.66, x + (rnd() - 0.5) * 8, r[3]);
+      c.ctx.stroke();
+    }
+  });
+}
+
+/** Alternating bands along the canvas y axis (fuselage length / wing span). */
+function bandsY(c: Canvas, r: Rect, cols: RGB[], n: number): void {
+  const h = (r[3] - r[1]) / n;
+  for (let i = 0; i < n; i++) fillRect(c, [r[0], r[1] + i * h, r[2], r[1] + (i + 1) * h], cols[i % cols.length]);
+}
+
+/** Natural metal with per-panel tone differences. */
+function bareMetal(c: Canvas, r: Rect): void {
+  fillRect(c, r, K.alu);
+  clipped(c, r, () => {
+    const w = r[2] - r[0], h = r[3] - r[1];
+    for (let i = 0; i < 26; i++) {
+      c.ctx.fillStyle = css(shade(K.alu, 0.9 + rnd() * 0.18), 0.6);
+      c.ctx.fillRect(r[0] + rnd() * w, r[1] + rnd() * h, w * (0.1 + rnd() * 0.25), h * (0.05 + rnd() * 0.15));
+    }
+  });
+}
+
+/**
+ * Text on a fuselage flank, sized in world units. The body canvas runs
+ * nose→tail along y and around the hull along x, so letters are laid down
+ * with a custom basis (mirrored per side so both read the right way round).
+ */
+function flankText(c: Canvas, o: SkinOpts, text: string, v: number, heightUnits: number, col: RGB, outline?: RGB): void {
+  const { ctx, W, H } = c;
+  const kx = W / o.bodyPerimeter; // px per unit around
+  const ky = H / o.bodyLength;    // px per unit along
+  const s = heightUnits / 50;     // font drawn at 50px
+  for (const side of [1, -1] as const) {
+    const cx = side > 0 ? W * 0.25 : W * 0.75;
+    const cy = H * (1 - v);
+    ctx.save();
+    ctx.setTransform(0, side * ky * s, side * kx * s, 0, cx, cy);
+    ctx.font = 'bold 50px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    if (outline) {
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = css(outline);
+      ctx.strokeText(text, 0, 0);
+    }
+    ctx.fillStyle = css(col);
+    ctx.fillText(text, 0, 0);
+    ctx.restore();
+  }
+}
+
+/** Paint the photoreal scheme for one skin; returns false when the plain base colour should be used. */
+function paintLivery(c: Canvas, part: 'wing' | 'body' | 'fin', o: SkinOpts): boolean {
+  const L = o.livery;
+  if (!L || L === 'interwar') return false;
+  const { W, H } = c;
+  const all: Rect = [0, 0, W, H];
+  // Wing halves: upper surface on the left of the canvas, underside on the right.
+  const upper: Rect = [0, 0, W / 2, H];
+  const lower: Rect = [W / 2, 0, W, H];
+  // Fuselage bands: the seam at x = 0 is the spine, x = W/2 the keel.
+  const topL: Rect = [0, 0, W * 0.2, H];
+  const topR: Rect = [W * 0.8, 0, W, H];
+  const upperL: Rect = [0, 0, W * 0.4, H];
+  const upperR: Rect = [W * 0.6, 0, W, H];
+  const belly: Rect = [W * 0.4, 0, W * 0.6, H];
+  const flankS: Rect = [W * 0.15, 0, W * 0.4, H];
+  const flankP: Rect = [W * 0.6, 0, W * 0.85, H];
+  const vy = (v: number) => H * (1 - v);
+
+  const upperCamo = (paint: (r: Rect) => void, under: RGB) => {
+    if (part === 'wing') { paint(upper); fillRect(c, lower, under); }
+    else if (part === 'body') { fillRect(c, belly, under); paint(upperL); paint(upperR); }
+    else paint(all);
+  };
+
+  switch (L) {
+    case 'linen':
+      fillRect(c, all, K.cdl);
+      return true;
+    case 'pc10':
+      upperCamo((r) => fillRect(c, r, K.pc10), K.cdl);
+      return true;
+    case 'streak':
+      fillRect(c, all, K.turquoise);
+      upperCamo((r) => streaks(c, r, K.streakOlive, part === 'body' ? 260 : 220, part === 'wing' ? 'x' : 'y'), K.turquoise);
+      return true;
+    case 'lozenge':
+      upperCamo((r) => lozenge(c, r, K.lozUpper, W / 16), K.cdl);
+      if (part === 'wing') lozenge(c, lower, K.lozLower, W / 16);
+      if (part === 'body') lozenge(c, belly, K.lozLower, W / 16);
+      return true;
+    case 'wood':
+      if (part === 'wing') {
+        fillRect(c, upper, K.olive);
+        blobs(c, upper, K.mauve, 5, 0.28);
+        fillRect(c, lower, K.cdl);
+      } else {
+        woodgrain(c, all, K.ply);
+      }
+      return true;
+    case 'french':
+      upperCamo((r) => {
+        fillRect(c, r, K.fr[0]);
+        blobs(c, r, K.fr[1], 5, 0.26);
+        blobs(c, r, K.fr[2], 4, 0.24);
+        blobs(c, r, K.fr[3], 4, 0.2);
+        blobs(c, r, K.fr[4], 2, 0.14);
+      }, K.cdl);
+      return true;
+    case 'raf':
+      upperCamo((r) => {
+        fillRect(c, r, K.darkEarth);
+        blobs(c, r, K.darkGreen, 6, 0.3);
+      }, K.sky);
+      if (part === 'body') {
+        fillRect(c, [0, vy(0.9), W, vy(0.85)], K.sky); // Sky tail band
+        flankText(c, o, 'QV', o.sideMarkV - 0.13, 0.42, K.codeGrey);
+        flankText(c, o, 'K', o.sideMarkV + 0.11, 0.42, K.codeGrey);
+      }
+      return true;
+    case 'splinter':
+      if (part === 'wing') {
+        splinter(c, upper, [K.rlm71, K.rlm02]);
+        fillRect(c, lower, K.rlm65);
+      } else if (part === 'body') {
+        fillRect(c, all, K.rlm65);
+        splinter(c, topL, [K.rlm71, K.rlm02]);
+        splinter(c, topR, [K.rlm71, K.rlm02]);
+        blobs(c, flankS, K.rlm71, 140, 0.03, 0.55);
+        blobs(c, flankP, K.rlm71, 140, 0.03, 0.55);
+        blobs(c, flankS, K.rlm02, 90, 0.03, 0.5);
+        blobs(c, flankP, K.rlm02, 90, 0.03, 0.5);
+        fillRect(c, [0, vy(0.13), W, vy(0.01)], K.rlmYellow); // yellow nose
+        flankText(c, o, '7', o.sideMarkV - 0.14, 0.5, [24, 24, 26], [232, 228, 218]);
+      } else {
+        fillRect(c, all, K.rlm65);
+        blobs(c, all, K.rlm71, 60, 0.05, 0.5);
+        // Yellow rudder aft of the hinge line.
+        fillRect(c, [0, 0, W * 0.5 * (1 - o.finHinge), H], K.rlmYellow);
+        fillRect(c, [W * (0.5 + 0.5 * o.finHinge), 0, W, H], K.rlmYellow);
+      }
+      return true;
+    case 'rlmlate':
+      upperCamo((r) => {
+        fillRect(c, r, K.rlm82);
+        blobs(c, r, K.rlm81, 6, 0.3);
+      }, K.rlm76);
+      if (part !== 'wing') {
+        const fl: Rect[] = part === 'body' ? [flankS, flankP] : [all];
+        for (const r of fl) { blobs(c, r, K.rlm81, 50, 0.06, 0.5); blobs(c, r, K.rlm82, 40, 0.06, 0.45); }
+      }
+      return true;
+    case 'olive':
+      upperCamo((r) => {
+        fillRect(c, r, K.od);
+        blobs(c, r, K.odFade, 7, 0.22, 0.7);
+      }, K.neutralGrey);
+      return true;
+    case 'metal':
+      bareMetal(c, all);
+      if (part === 'wing') bandsY(c, [0, vy(0.62), W, vy(0.26)], [K.navyWhite, [28, 28, 30]], 5);
+      if (part === 'body') bandsY(c, [0, vy(0.8), W, vy(0.6)], [K.navyWhite, [28, 28, 30]], 5);
+      return true;
+    case 'navy':
+      if (part === 'wing') { fillRect(c, upper, K.seaBlue); fillRect(c, lower, K.navyWhite); }
+      else if (part === 'body') {
+        fillRect(c, all, K.midBlue);
+        fillRect(c, topL, K.seaBlue); fillRect(c, topR, K.seaBlue);
+        fillRect(c, belly, K.navyWhite);
+      } else { fillRect(c, all, K.seaBlue); blobs(c, all, K.midBlue, 3, 0.4, 0.6); }
+      return true;
+    case 'soviet':
+      upperCamo((r) => fillRect(c, r, K.amt4), K.amt7);
+      if (part === 'body') flankText(c, o, '9', o.sideMarkV - 0.14, 0.5, [232, 228, 218]);
+      return true;
+    case 'enemy': {
+      const base = rgb(part === 'wing' ? o.wing : o.body);
+      fillRect(c, all, base);
+      upperCamo((r) => streaks(c, r, shade(rgb(o.body), 0.55), part === 'body' ? 200 : 180, part === 'wing' ? 'x' : 'y'), base);
+      return true;
+    }
+    default:
+      return false;
+  }
+}
+
 // ---------------------------------------------------------------- skin painters
 
 function wingSkin(o: SkinOpts, marked: boolean): Canvas {
   const W = o.tier === 'photoreal' ? 1024 : 512;
   const H = W / 2;
-  const c = makeCanvas(W, H, o.tier, o.metal ? 0.38 : o.fabric ? 0.78 : 0.6, o.metal ? 1 : 0);
-  base(c, rgb(o.wing), o.tier);
+  const c = makeCanvas(W, H, o.tier, o.metal ? 0.35 : o.fabric ? 0.7 : 0.5, o.metal ? 1 : 0);
+  paintPart(c, 'wing', o);
   if (o.fabric) {
     // Rib tapes run chordwise: horizontal on this canvas (u = chord, v = span).
     ribs(c, H * (0.38 / o.wingHalfSpan), true, 0.02, 0.97);
@@ -358,8 +711,8 @@ function wingSkin(o: SkinOpts, marked: boolean): Canvas {
 function bodySkin(o: SkinOpts): Canvas {
   const W = o.tier === 'photoreal' ? 512 : 256;
   const H = W * 2;
-  const c = makeCanvas(W, H, o.tier, o.metal ? 0.38 : o.fabric ? 0.72 : 0.58, o.metal ? 1 : 0);
-  base(c, rgb(o.body), o.tier);
+  const c = makeCanvas(W, H, o.tier, o.metal ? 0.35 : o.fabric ? 0.66 : 0.48, o.metal ? 1 : 0);
+  paintPart(c, 'body', o);
   const vy = (v: number) => H * (1 - v); // fuselage v runs nose -> tail, canvas rows run top -> bottom
   if (o.fabric) {
     // Stringers along the length, formers across.
@@ -439,8 +792,8 @@ function bodySkin(o: SkinOpts): Canvas {
 function finSkin(o: SkinOpts): Canvas {
   const W = o.tier === 'photoreal' ? 512 : 256;
   const H = W;
-  const c = makeCanvas(W, H, o.tier, o.fabric ? 0.78 : 0.6, o.metal ? 1 : 0);
-  base(c, rgb(o.body), o.tier);
+  const c = makeCanvas(W, H, o.tier, o.fabric ? 0.7 : 0.5, o.metal ? 1 : 0);
+  paintPart(c, 'fin', o);
   if (o.fabric) ribs(c, H * (0.3 / o.finHeight), true, 0.02, 0.98);
   // u: 0..0.5 starboard (TE -> LE), 0.5..1 port (LE -> TE); x = chord fraction.
   const band = (x0: number, x1: number, col: RGB, v0 = 0.02, v1 = 0.98) => {
@@ -479,7 +832,7 @@ function standard(c: Canvas, o: SkinOpts, extra: Partial<THREE.MeshStandardMater
   };
   if (c.h) {
     params.normalMap = tex(normalFromHeight(c.h, c.W, c.H, 2.2), false);
-    params.normalScale = new THREE.Vector2(0.55, 0.55);
+    params.normalScale = new THREE.Vector2(0.9, 0.9);
   }
   if (c.r) {
     const rm = tex(c.r.canvas, false);

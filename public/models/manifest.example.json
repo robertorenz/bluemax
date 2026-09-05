@@ -1,0 +1,22 @@
+{
+  "_readme": "Rename this file to manifest.json once you have dropped .glb files in this folder. Each key is a hangar id (or enemy-bi / enemy-tri / enemy-mono / enemy-ace / enemy-bomber). Models are auto-scaled to the airframe's wingspan and centred; set rotY (radians) if the nose does not point toward -z, and scale/x/y/z to fine-tune. Suggested free sources (Sketchfab, downloadable, CC-BY unless noted; download with your own account, export as glTF Binary) are listed per entry in _source.",
+  "eindecker": { "file": "eindecker.glb", "rotY": 0, "_source": "https://sketchfab.com/models/b541015a73e245768c25e5071bfdda62 (E1 by manilov.ap)" },
+  "camel": { "file": "camel.glb", "rotY": 0, "_source": "https://sketchfab.com/models/25ecc4a9887a44e79c282078db6f3275 (Sopwith by stealth86)" },
+  "dr1": { "file": "dr1.glb", "rotY": 0, "_source": "https://sketchfab.com/models/383b5933969f46668c2efdac9193f591 (Dr1 by manilov.ap)" },
+  "albatros": { "file": "albatros.glb", "rotY": 0, "_source": "https://sketchfab.com/models/6fe8dec8ff8d4328a130e0fbf964e9fa (Albatros D.III stylised by LobkeVGH)" },
+  "spad": { "file": "spad.glb", "rotY": 0, "_source": "https://sketchfab.com/models/1b2fbdc74c0c41529ddfcba24af7cdc2 (SPAD XIII by BrusselseWafel)" },
+  "soptri": { "file": "soptri.glb", "rotY": 0, "_source": "https://sketchfab.com/models/186d72904b3846ea88a425568cacd546 (Sopwith Triplane by manilov.ap)" },
+  "bristol": { "file": "bristol.glb", "rotY": 0, "_source": "https://sketchfab.com/models/1df44f8ecf0b4b3888e07f841c1197ce (Bristol F.2B by technoscience3d, CC0)" },
+  "d7": { "file": "d7.glb", "rotY": 0, "_source": "https://sketchfab.com/models/51218e39a2ff4722859cecc6fe187b20 (Fokker D.VII Ernst Udet by 42manako)" },
+  "p26": { "file": "p26.glb", "rotY": 0, "_source": "https://sketchfab.com/models/6699ed33a40d4b3b8207279a8e66dc5b (Boeing P26 Peashooter by helijah)" },
+  "gladiator": { "file": "gladiator.glb", "rotY": 0, "_source": "https://sketchfab.com/models/b724087ae64d457c853a816a67523e61 (Gladiator by manilov.ap)" },
+  "i16": { "file": "i16.glb", "rotY": 0, "_source": "https://sketchfab.com/models/51b405cd4ae94863ada835fde14d5757 (Polikarpov I-16 by vit4ce)" },
+  "spitfire": { "file": "spitfire.glb", "rotY": 0, "_source": "https://sketchfab.com/models/a49be5ab6d624e75b55231948a31b1b3 (Supermarine Spitfire Mk.IIa by barking_dogo)" },
+  "bf109": { "file": "bf109.glb", "rotY": 0, "_source": "https://sketchfab.com/models/109ef10964dc404089507fc33aad2982 (Bf109 by manilov.ap)" },
+  "p40": { "file": "p40.glb", "rotY": 0, "_source": "https://sketchfab.com/models/6f1979e59f9f450795873fdee891152b (P40 by manilov.ap)" },
+  "p38": { "file": "p38.glb", "rotY": 0, "_source": "https://sketchfab.com/models/9417265e5b1a44c9b96e4ea1c3133356 (Lockheed P-38 Lightning by jratanatharathorn)" },
+  "p51": { "file": "p51.glb", "rotY": 0, "_source": "https://sketchfab.com/models/11a78cd198c443969e8d741605d4e04f (P51 by manilov.ap)" },
+  "tbf": { "file": "tbf.glb", "rotY": 0, "_source": "https://sketchfab.com/models/4db814ed356a498cabe4badafd06ff6c (Grumman TBM Avenger by helijah)" },
+  "me262": { "file": "me262.glb", "rotY": 0, "_source": "https://sketchfab.com/models/7DE4vSfKhdxAfX5KJkSZIzO0MlJ (Messerschmitt Me 262 by helijah)" },
+  "ho229": { "file": "ho229.glb", "rotY": 0, "_source": "https://sketchfab.com/models/fira25l1WptpPWMZCYwKyQ9j2g6 (Horten Ho IX by helijah)" }
+}

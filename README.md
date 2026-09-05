@@ -99,7 +99,7 @@ The hangar menu has a **MODELS** switch with three looks for every aircraft
 |-------|--------------|
 | **Classic** | The original low-poly block models. |
 | **Detailed** | Airframes lofted from real cross-sections and airfoil profiles: rounded fuselages, elliptical / tapered / rounded-tip wings with dihedral and sweep, proper fins and rudders, radial engines with visible cylinders, spinners, exposed inline cylinder heads and exhaust stacks, framed or bubble canopies with a pilot inside, V-strut undercarriages, spats, interplane and cabane struts with rigging wires. Skins are painted procedurally: doped-fabric rib tapes or panel lines, and period-correct roundels, crosses, stars, fin flashes and rudder stripes. |
-| **Photoreal** | The same airframes with weathered PBR skins: mottled sun-faded paint, panel lines and rivet rows baked into normal maps, exhaust staining, chipped leading edges, roughness/metalness maps, bare-metal finishes and sky reflections on canopies. Heavier on the GPU; skins are built once and cached. |
+| **Photoreal** | The same airframes in their historical liveries: PC10 over clear-doped linen on the Camel, Bristol and Triplane, Fokker streaked dope on the Dr.I, printed five-colour lozenge on the D.VII, varnished plywood on the Albatros, French five-colour camouflage on the SPAD, RAF Dark Earth / Dark Green with Sky undersides, tail band and squadron codes on the Spitfire and Gladiator, Luftwaffe splinter with mottled flanks and a yellow nose on the Bf 109, late-war RLM 81/82 on the Me 262 and Ho 229, olive drab over neutral grey on the P-40 and P-38, bare metal with invasion stripes on the Mustang, Navy tri-colour on the Avenger, Soviet green over blue on the I-16. Over that: sun-faded mottle, panel lines and rivet rows baked into normal maps, exhaust staining, chipped leading edges, roughness/metalness maps and sky reflections on canopies and bare metal. Heavier on the GPU; skins are built once and cached. |
 
 In the detailed and photoreal styles the planes also *move* like aircraft:
 ailerons, elevators and rudder deflect with your inputs, the nose lags into a
@@ -114,11 +114,21 @@ describe them in `public/models/manifest.json`, keyed by hangar id
 `enemy-ace`, `enemy-bomber`):
 
 ```json
-{ "spitfire": { "file": "spitfire.glb", "scale": 1.0, "rotY": 3.1416, "y": 0, "z": 0 } }
+{ "spitfire": { "file": "spitfire.glb", "rotY": 3.1416 } }
 ```
 
-Models should face −z at roughly 7 units per fighter length; use `scale`,
-`rotY`, `y` and `z` to fit. Anything missing falls back to the procedural build.
+A loaded model is fitted automatically: scaled so its wingspan matches the
+procedural airframe and centred on it. Set `rotY` (radians) if the nose does
+not point toward −z, and `scale`, `x`, `y`, `z` to fine-tune. Anything missing
+falls back to the procedural build.
+
+Free, downloadable, Creative Commons models exist on Sketchfab for every plane
+in the hangar; `public/models/manifest.example.json` lists one suggestion per
+aircraft with its source link (mostly CC-BY, one CC0 — credit the authors if
+you redistribute). Sketchfab needs a (free) account to download: open the link,
+choose *Download 3D model → glTF*, unzip, save the `.glb` under
+`public/models/` with the file name from the manifest, then rename
+`manifest.example.json` to `manifest.json`.
 
 ## Scoring
 

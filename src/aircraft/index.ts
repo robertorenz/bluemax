@@ -1,7 +1,7 @@
 import { makePlaneClassic, makeEnemyBomberClassic } from './classic';
 import { makePlaneDetailed, makeEnemyBomberDetailed } from './detailed';
 import { clearSkinCache, setSkinCaching } from './skins';
-import { upgradeToRealModel } from './gltf';
+import { upgradeToRealModel, rememberFit } from './gltf';
 import type { PlaneForm, PlaneModel, PlaneShape, PlaneStyle } from './types';
 
 export type { PlaneForm, PlaneModel, PlaneShape, PlaneStyle, Nation, WingSpec } from './types';
@@ -43,7 +43,10 @@ export function makePlane(
   const s = override ?? style;
   if (s === 'classic') return makePlaneClassic(form, body, wing, detail);
   const model = makePlaneDetailed(form, body, wing, detail, s);
-  if (s === 'photoreal' && id) upgradeToRealModel(id, model);
+  if (s === 'photoreal' && id) {
+    rememberFit(model);
+    upgradeToRealModel(id, model);
+  }
   return model;
 }
 
@@ -51,22 +54,25 @@ export function makeEnemyBomber(override?: PlaneStyle): PlaneModel {
   const s = override ?? style;
   if (s === 'classic') return makeEnemyBomberClassic();
   const model = makeEnemyBomberDetailed(s);
-  if (s === 'photoreal') upgradeToRealModel('enemy-bomber', model);
+  if (s === 'photoreal') {
+    rememberFit(model);
+    upgradeToRealModel('enemy-bomber', model);
+  }
   return model;
 }
 
 /** Enemy archetype geometry: generic mono/bi/tri forms for the red air force. */
 export const ENEMY_FORMS: Record<PlaneShape, PlaneForm> = {
   mono: {
-    fuselage: 'box', nose: 'flat', era: 'ww1', nation: 'de', tail: 'comma',
+    fuselage: 'box', nose: 'flat', era: 'ww1', nation: 'de', tail: 'comma', livery: 'enemy',
     wings: [{ y: 0.95, span: 10.5, chord: 2.2 }],
   },
   bi: {
-    fuselage: 'box', nose: 'flat', struts: 'quad', era: 'ww1', nation: 'de', tail: 'fokker',
+    fuselage: 'box', nose: 'flat', struts: 'quad', era: 'ww1', nation: 'de', tail: 'fokker', livery: 'enemy',
     wings: [{ y: 1.95, span: 9, chord: 1.9 }, { y: 0.3, span: 8, chord: 1.7 }],
   },
   tri: {
-    fuselage: 'box', nose: 'flat', struts: 'quad', axleWing: true, era: 'ww1', nation: 'de', tail: 'comma',
+    fuselage: 'box', nose: 'flat', struts: 'quad', axleWing: true, era: 'ww1', nation: 'de', tail: 'comma', livery: 'enemy',
     wings: [
       { y: 2.55, span: 7.4, chord: 1.6 },
       { y: 1.4, span: 8.4, chord: 1.8 },

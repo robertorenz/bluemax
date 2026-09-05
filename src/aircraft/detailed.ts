@@ -557,7 +557,7 @@ export function makePlaneDetailed(form: PlaneForm, body: number, wing: number, d
     sideMarkV: f.v(zCockpit + 1.4), cockpitV: f.v(zCockpit - 0.7),
     exhaustV: form.exhaust ? f.v(f.z0 + 0.7) : undefined,
     mouth: !!form.mouth,
-    finChord: 1, finHeight: 1.5, finHinge: 0.45,
+    finChord: 1, finHeight: 1.5, finHinge: 0.45, livery: form.livery,
   });
 
   // Fuselage.
@@ -1009,7 +1009,7 @@ function makeP38(form: PlaneForm, body: number, wing: number, detail: number, ti
     wingChord: ol.zTE(0.68) - ol.zLE(0.68), wingHalfSpan: wingSpec.span / 2,
     bodyLength: boom.length, bodyPerimeter: boom.perimeter,
     sideMarkV: boom.v(2.0), cockpitV: boom.v(-1.5), mouth: false,
-    finChord: 1.2, finHeight: 1.8, finHinge: 0.5,
+    finChord: 1.2, finHeight: 1.8, finHinge: 0.5, livery: form.livery,
   });
 
   g.add(fuselageMesh(FUSELAGES.p38pod, pod, sk.bodySolid, T.n, T.m, false));
@@ -1108,7 +1108,7 @@ function makeHo229(form: PlaneForm, body: number, wing: number, detail: number, 
     tier, body, wing, detail, nation: form.nation, era: 'ww2', fabric: false, metal: !!form.metal,
     wingChord: ol.zTE(0.68) - ol.zLE(0.68), wingHalfSpan: outer.span / 2,
     bodyLength: 5, bodyPerimeter: 4, sideMarkV: 0.5, cockpitV: 0.3, mouth: false,
-    finChord: 1, finHeight: 1, finHinge: 0.5,
+    finChord: 1, finHeight: 1, finHinge: 0.5, livery: form.livery,
   });
   const wingHalves: THREE.Object3D[] = [];
   model.aileronsL = []; model.aileronsR = []; model.elevators = [];
@@ -1185,7 +1185,7 @@ function makeHo229(form: PlaneForm, body: number, wing: number, detail: number, 
 export function makeEnemyBomberDetailed(tier: Tier): PlaneModel {
   return makePlaneDetailed({
     fuselage: 'bomber', nose: 'flat', gear: 'retract', era: 'ww2', tail: 'rounded', finScale: 1.3,
-    nation: 'de', dihedral: 0.06,
+    nation: 'de', dihedral: 0.06, livery: 'splinter',
     wings: [{ y: 1.0, span: 16, chord: 3.0, planform: 'taper', taper: 0.45, thick: 0.14 }],
   }, 0x5a5f52, 0x6b7060, 0x8a8f84, tier);
 }

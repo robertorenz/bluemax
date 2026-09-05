@@ -5,6 +5,11 @@ export type PlaneShape = 'mono' | 'bi' | 'tri';
 
 export type Nation = 'uk' | 'de' | 'fr' | 'us' | 'ussr';
 
+/** Historical paint scheme used by the photoreal skins. */
+export type Livery =
+  | 'linen' | 'pc10' | 'streak' | 'lozenge' | 'wood' | 'french'
+  | 'raf' | 'splinter' | 'rlmlate' | 'olive' | 'metal' | 'navy' | 'soviet' | 'interwar' | 'enemy';
+
 /** Which generation of models to build. Persisted in localStorage. */
 export type PlaneStyle = 'classic' | 'detailed' | 'photoreal';
 
@@ -56,6 +61,7 @@ export interface PlaneForm {
   metal?: boolean;                     // bare-metal finish (photoreal reflections)
   wires?: boolean;                     // rigging wires between the wings
   length?: number;                     // fuselage length scale
+  livery?: Livery;                     // photoreal paint scheme
 }
 
 /** A built aircraft plus its animatable parts. Absent parts mean "not on this airframe". */
