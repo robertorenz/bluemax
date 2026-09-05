@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { AudioFx } from './audio';
 import { P } from './palette';
+import type { PlaneModel } from './aircraft/types';
 import {
   makePlane, makeBlimp, ENEMY_FORMS, makeBuilding, makeAAGun, makeRunway, makeBomb, makeBullet,
   makeCloud, makeBirdFlock, makeRubble, makeFactory, makeTank, makeDepot,
@@ -72,6 +73,33 @@ function disposeGroup(group: THREE.Group): void {
   });
 }
 
+/** Flicker exhaust and jet flames around their built scale. */
+function flickerFlames(a: PlaneModel): void {
+  for (const f of a.flames ?? []) {
+    const b = (f.userData.base as THREE.Vector3 | undefined) ?? (f.userData.base = f.scale.clone());
+    f.scale.set(
+      b.x * (0.8 + Math.random() * 0.5),
+      b.y * (0.5 + Math.random() * 0.9),
+      b.z * (0.8 + Math.random() * 0.5),
+    );
+  }
+}
+
+/** Enemy airframes get a steady prop blur and a little control-surface life. */
+function dressEnemy(parts: PlaneModel): PlaneModel {
+  for (const d of parts.propDiscs ?? []) (d.material as THREE.MeshBasicMaterial).opacity = 0.45;
+  return parts;
+}
+
+function animateEnemyParts(a: PlaneModel, wobble: number): void {
+  flickerFlames(a);
+  const s = Math.sin(wobble);
+  for (const p of a.rudders ?? []) p.rotation.y = s * 0.12;
+  for (const p of a.aileronsL ?? []) p.rotation.x = -s * 0.15;
+  for (const p of a.aileronsR ?? []) p.rotation.x = s * 0.15;
+  for (const p of a.elevators ?? []) p.rotation.x = Math.cos(wobble * 0.7) * 0.08;
+}
+
 const WORLD_SPEED = 65;   // ground scroll speed, units/s
 const PLAYER_Z = -48;     // plane sits well ahead of the camera so bomb impacts land mid-screen
 const MAX_ALT = 38;
@@ -81,8 +109,9 @@ const GRAVITY = 25;
 
 interface AirEnemy {
   group: THREE.Group;
-  prop: THREE.Mesh;
-  prop2?: THREE.Mesh;
+  prop: THREE.Object3D;
+  prop2?: THREE.Object3D;
+  parts?: PlaneModel;
   kind: EnemyKind;
   mode: 'attack' | 'overtake';
   alt: number;
@@ -231,8 +260,11 @@ export class Game {
   private keys = new Set<string>();
 
   private player!: THREE.Group;
-  private playerProp!: THREE.Mesh;
-  private playerProp2?: THREE.Mesh;
+  private playerProp!: THREE.Object3D;
+  private playerProp2?: THREE.Object3D;
+  private airframe!: PlaneModel;
+  private ctrl = { ail: 0, elev: 0, rud: 0, yaw: 0, flex: 0 };
+  private muzzleUntil = 0;
   private chunks: THREE.Group[] = [];
   private clouds: THREE.Group[] = [];
   private cloudMats: THREE.MeshLambertMaterial[] = [];
@@ -539,12 +571,16 @@ export class Game {
     this.maxBombs = def.bombs;
     const pos = this.player?.position.clone();
     if (this.player) this.scene.remove(this.player);
-    const { group, prop, prop2 } = makePlane(def.form, def.body, def.wing, def.detail);
+    const model = makePlane(def.form, def.body, def.wing, def.detail, def.id);
+    const { group, prop, prop2 } = model;
     group.position.copy(pos ?? new THREE.Vector3(0, this.alt, PLAYER_Z));
     group.scale.setScalar(1.25); // offset the extra camera distance
     this.player = group;
     this.playerProp = prop;
     this.playerProp2 = prop2;
+    this.airframe = model;
+    for (const w of model.wingHalves ?? []) w.userData.baseRz = w.rotation.z;
+    this.ctrl = { ail: 0, elev: 0, rud: 0, yaw: 0, flex: 0 };
     this.scene.add(group);
   }
 
@@ -691,7 +727,27 @@ export class Game {
     this.activeRunway = null;
     this.audio.init();
     this.audio.startMusic();
+    this.warmModels();
     this.state = 'playing';
+  }
+
+  /** Build each enemy airframe once up front so its skins are cached before the first spawn. */
+  private warmModels(): void {
+    const tmp: THREE.Group[] = [];
+    for (const k of ['mono', 'bi', 'tri'] as const) {
+      const info = ENEMY_INFO[k];
+      tmp.push(makePlane(ENEMY_FORMS[info.shape as PlaneShape], info.body, info.wing, 0xeed8d4).group);
+    }
+    tmp.push(
+      makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4).group,
+      makePlane(ENEMY_FORMS.tri, 0x8c1f1f, 0x1f1f22, 0xeed8d4).group,
+      makeEnemyBomber().group,
+    );
+    for (const g of tmp) {
+      g.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry.dispose();
+      });
+    }
   }
 
   /** Current ground-scroll speed; the world slows while rolling down a runway. */
@@ -710,6 +766,7 @@ export class Game {
 
   update(dt: number, now: number): void {
     this.now = now;
+    this.animateAirframe(dt);
 
     // Photo mode: freeze the world, orbit the camera.
     if (this.photo) {
@@ -777,6 +834,35 @@ export class Game {
   }
 
   // ------------------------------------------------------------- player
+
+  /** Control surfaces, prop blur, exhaust, gear, and a little sideslip on the player's airframe. */
+  private animateAirframe(dt: number): void {
+    const a = this.airframe;
+    if (!a) return;
+    const flying = this.mode === 'flying' && this.state === 'playing';
+    const steer = flying ? (this.keys.has('ArrowLeft') ? 1 : this.keys.has('ArrowRight') ? -1 : 0) : 0;
+    const pitchIn = flying ? (this.keys.has('ArrowUp') ? 1 : this.keys.has('ArrowDown') ? -1 : 0) : 0;
+    const c = this.ctrl;
+    c.ail = THREE.MathUtils.damp(c.ail, steer * 0.45, 14, dt);
+    c.elev = THREE.MathUtils.damp(c.elev, -pitchIn * 0.4, 14, dt);
+    c.rud = THREE.MathUtils.damp(c.rud, -steer * 0.3, 10, dt);
+    c.yaw = THREE.MathUtils.damp(c.yaw, this.player.rotation.z * 0.35, 2.2, dt);
+    c.flex = THREE.MathUtils.damp(c.flex, pitchIn * 0.035, 5, dt);
+    for (const p of a.aileronsL ?? []) p.rotation.x = -c.ail;
+    for (const p of a.aileronsR ?? []) p.rotation.x = c.ail;
+    for (const p of a.elevators ?? []) p.rotation.x = c.elev;
+    for (const p of a.rudders ?? []) p.rotation.y = c.rud;
+    for (const w of a.wingHalves ?? []) {
+      w.rotation.z = (w.userData.baseRz as number) + (w.userData.side as number) * c.flex;
+    }
+    // The nose lags the bank a little, like a real turn entry.
+    this.player.rotation.y = flying ? c.yaw : THREE.MathUtils.damp(this.player.rotation.y, 0, 6, dt);
+    const spin = Math.min(1, this.speedFactor);
+    for (const d of a.propDiscs ?? []) (d.material as THREE.MeshBasicMaterial).opacity = 0.5 * spin;
+    flickerFlames(a);
+    if (a.gear) a.gear.visible = this.mode !== 'flying' || this.alt < 5;
+    if (this.now > this.muzzleUntil) for (const m of a.muzzles ?? []) m.visible = false;
+  }
 
   private updatePlayer(dt: number): void {
     const p = this.player.position;
@@ -863,6 +949,12 @@ export class Game {
         this.showAlert('⚠ GUNS OVERHEATED');
       }
       this.audio.gun();
+      this.muzzleUntil = this.now + 55;
+      for (const m of this.airframe.muzzles ?? []) {
+        m.visible = true;
+        m.rotation.z = Math.random() * Math.PI;
+        m.scale.setScalar(0.8 + Math.random() * 0.5);
+      }
       for (const gx of [-1.1, 1.1]) {
         this.spawnBullet(
           new THREE.Vector3(p.x + gx, p.y + 1.1, p.z - 3.2),
@@ -1077,10 +1169,12 @@ export class Game {
       kind !== 'blimp' && kind !== 'balloon' &&
       this.now - this.startedAt > 45000 && Math.random() < 0.35;
 
-    const { group, prop } =
+    const parts = dressEnemy(
       kind === 'blimp' ? makeBlimp() :
       kind === 'balloon' ? makeBalloon() :
-      makePlane(ENEMY_FORMS[info.shape as PlaneShape], info.body, info.wing, 0xeed8d4);
+      makePlane(ENEMY_FORMS[info.shape as PlaneShape], info.body, info.wing, 0xeed8d4, `enemy-${kind}`),
+    );
+    const { group, prop } = parts;
 
     const alt =
       kind === 'blimp' ? 22 + Math.random() * 12 :
@@ -1105,6 +1199,7 @@ export class Game {
     this.enemies.push({
       group,
       prop,
+      parts,
       kind,
       mode: fromBehind ? 'overtake' : 'attack',
       alt,
@@ -1250,26 +1345,26 @@ export class Game {
   private spawnFormation(): void {
     const alt = 18 + Math.random() * 10;
     const cx = (Math.random() - 0.5) * 1.4 * LATERAL_RANGE;
-    const bomberModel = makeEnemyBomber();
+    const bomberModel = dressEnemy(makeEnemyBomber());
     bomberModel.group.rotation.y = Math.PI;
     bomberModel.group.position.set(cx, alt, -480);
     this.scene.add(bomberModel.group);
     const info = ENEMY_INFO.bomber;
     this.enemies.push({
-      group: bomberModel.group, prop: bomberModel.prop, prop2: bomberModel.prop2,
+      group: bomberModel.group, prop: bomberModel.prop, prop2: bomberModel.prop2, parts: bomberModel,
       kind: 'bomber', mode: 'attack', alt,
       speed: 22 + Math.random() * 8, wobble: Math.random() * 6,
       hp: info.hp, hitR: info.hitR, score: info.score,
       fireAt: this.now + 2000,
     });
     for (const side of [-1, 1]) {
-      const esc = makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4);
+      const esc = dressEnemy(makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4, 'enemy-bi'));
       esc.group.rotation.y = Math.PI;
       esc.group.position.set(cx + side * 13, alt + 2, -470);
       this.scene.add(esc.group);
       const bi = ENEMY_INFO.bi;
       this.enemies.push({
-        group: esc.group, prop: esc.prop, kind: 'bi', mode: 'attack', alt: alt + 2,
+        group: esc.group, prop: esc.prop, parts: esc, kind: 'bi', mode: 'attack', alt: alt + 2,
         speed: 26 + Math.random() * 8, wobble: Math.random() * 6,
         hp: bi.hp, hitR: bi.hitR, score: bi.score,
         fireAt: this.now + 1500 + Math.random() * 1000,
@@ -1281,13 +1376,13 @@ export class Game {
   /** A named enemy ace: tough, fast, aggressive. */
   private spawnAce(): void {
     const name = ACE_NAMES[Math.floor(Math.random() * ACE_NAMES.length)];
-    const model = makePlane(ENEMY_FORMS.tri, 0x8c1f1f, 0x1f1f22, 0xeed8d4);
+    const model = dressEnemy(makePlane(ENEMY_FORMS.tri, 0x8c1f1f, 0x1f1f22, 0xeed8d4, 'enemy-ace'));
     model.group.rotation.y = Math.PI;
     const alt = 10 + Math.random() * 20;
     model.group.position.set((Math.random() - 0.5) * 2 * LATERAL_RANGE, alt, -480);
     this.scene.add(model.group);
     this.enemies.push({
-      group: model.group, prop: model.prop, kind: 'tri', mode: 'attack', alt,
+      group: model.group, prop: model.prop, parts: model, kind: 'tri', mode: 'attack', alt,
       speed: 60 + Math.random() * 25, wobble: Math.random() * 6,
       hp: 6, hitR: 4.2, score: 500, ace: name,
       fireAt: this.now + 800,
@@ -1312,7 +1407,10 @@ export class Game {
     push(makeControlTower(), 'tower', -6, 48);
     const parkedCount = 2 + Math.floor(Math.random() * 2);
     for (let i = 0; i < parkedCount; i++) {
-      const plane = makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4).group;
+      const parked = makePlane(ENEMY_FORMS.bi, 0x8c4a45, 0xc47a6e, 0xeed8d4, 'enemy-bi');
+      if (parked.gear) parked.gear.visible = true;
+      for (const d of parked.propDiscs ?? []) d.visible = false;
+      const plane = parked.group;
       plane.rotation.y = Math.random() * Math.PI * 2;
       push(plane, 'parked', 6 + Math.random() * 6, 60 + i * 14);
     }
@@ -1540,6 +1638,7 @@ export class Game {
       e.wobble += dt * 2.2;
       e.prop.rotation.z += 45 * dt;
       if (e.prop2) e.prop2.rotation.z -= 45 * dt;
+      if (e.parts) animateEnemyParts(e.parts, e.wobble);
 
       const blimp = e.kind === 'blimp';
       const balloon = e.kind === 'balloon';

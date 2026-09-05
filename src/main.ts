@@ -7,6 +7,7 @@ import {
   makeHangar, makeLighthouse, makeControlTower,
 } from './models';
 import { PLANES, PLANE_MAP, DEFAULT_PLANE, type PlaneType } from './planes';
+import { PLANE_STYLES, getPlaneStyle, setPlaneStyle, setSkinCaching } from './aircraft';
 import {
   loadScores, addScore, qualifies, best, fetchGlobalScores, fetchRank, remoteEnabled,
   type ScoreEntry,
@@ -48,8 +49,32 @@ stored = LEGACY_PLANES[stored] ?? stored;
 let selectedPlane: PlaneType =
   PLANE_MAP[stored] && unlocked(stored) ? stored : DEFAULT_PLANE;
 
-/** Render each hangar model once into a small transparent thumbnail. */
-function makePlaneThumbs(): Record<string, string> {
+let planeThumbs: Record<string, string> = {};
+let thumbRun = 0;
+
+/** Free a thumbnail model's private geometry and textures (shared materials are kept). */
+function disposeModel(obj: THREE.Object3D): void {
+  obj.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    o.geometry.dispose();
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    for (const m of mats) {
+      if (m.userData.shared) continue;
+      const st = m as THREE.MeshStandardMaterial;
+      st.map?.dispose();
+      st.normalMap?.dispose();
+      st.roughnessMap?.dispose();
+      m.dispose();
+    }
+  });
+}
+
+/**
+ * Render each hangar model into a small transparent thumbnail, one per frame so
+ * the menu stays responsive while the heavier photoreal skins are painted.
+ */
+function renderPlaneThumbs(): void {
+  const run = ++thumbRun;
   const W = 220, H = 130;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(W, H);
@@ -66,21 +91,31 @@ function makePlaneThumbs(): Record<string, string> {
   copy.width = W;
   copy.height = H;
   const ctx = copy.getContext('2d')!;
-  const thumbs: Record<string, string> = {};
-  for (const def of PLANES) {
+  let i = 0;
+  const step = (): void => {
+    if (run !== thumbRun || i >= PLANES.length) {
+      renderer.dispose();
+      return;
+    }
+    const def = PLANES[i++];
+    setSkinCaching(false);
     const { group } = makePlane(def.form, def.body, def.wing, def.detail);
+    setSkinCaching(true);
     scene.add(group);
     renderer.render(scene, cam);
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(renderer.domElement, 0, 0);
-    thumbs[def.id] = copy.toDataURL();
+    planeThumbs[def.id] = copy.toDataURL();
     scene.remove(group);
-  }
-  renderer.dispose();
-  return thumbs;
+    disposeModel(group);
+    const img = document.querySelector<HTMLImageElement>(`#planeGrid img[data-plane="${def.id}"]`);
+    if (img) img.src = planeThumbs[def.id];
+    setTimeout(step, 0); // a task per model keeps the menu responsive, even in a background tab
+  };
+  step();
 }
 
-const planeThumbs = makePlaneThumbs();
+renderPlaneThumbs();
 
 // ---------------------------------------------------------------- scoring help
 
@@ -164,7 +199,15 @@ function buildScoreGrid(): void {
 buildScoreGrid();
 
 const helpEl = $('help');
-$('helpBtn').addEventListener('click', () => helpEl.classList.remove('hidden'));
+let scoreGridStale = false;
+$('helpBtn').addEventListener('click', () => {
+  if (scoreGridStale) {
+    $('scoreGrid').innerHTML = '';
+    buildScoreGrid();
+    scoreGridStale = false;
+  }
+  helpEl.classList.remove('hidden');
+});
 $('helpClose').addEventListener('click', () => helpEl.classList.add('hidden'));
 
 function rebuildPlaneCards(): void {
@@ -180,7 +223,8 @@ function rebuildPlaneCards(): void {
 
     const icon = document.createElement('img');
     icon.className = 'p-thumb';
-    icon.src = planeThumbs[def.id];
+    icon.dataset.plane = def.id;
+    if (planeThumbs[def.id]) icon.src = planeThumbs[def.id];
     icon.alt = def.label;
     icon.draggable = false;
     const name = document.createElement('div');
@@ -210,6 +254,38 @@ function rebuildPlaneCards(): void {
 
 rebuildPlaneCards();
 game.choosePlane(selectedPlane);
+
+// ---------------------------------------------------------------- model style
+
+/** Classic blocks, lofted detailed airframes, or weathered photoreal skins. */
+function buildStyleBar(): void {
+  const bar = $('styleBar');
+  bar.innerHTML = '';
+  const label = document.createElement('span');
+  label.className = 'style-label';
+  label.textContent = 'MODELS';
+  bar.appendChild(label);
+  for (const st of PLANE_STYLES) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'style-btn' + (st.id === getPlaneStyle() ? ' selected' : '');
+    btn.textContent = st.label.toUpperCase();
+    btn.title = st.desc;
+    btn.addEventListener('click', () => {
+      if (st.id === getPlaneStyle()) return;
+      setPlaneStyle(st.id);
+      buildStyleBar();
+      planeThumbs = {};
+      renderPlaneThumbs();
+      rebuildPlaneCards();
+      game.choosePlane(selectedPlane); // live preview behind the menu
+      scoreGridStale = true;
+    });
+    bar.appendChild(btn);
+  }
+  $('styleDesc').textContent = PLANE_STYLES.find((st) => st.id === getPlaneStyle())?.desc ?? '';
+}
+buildStyleBar();
 
 // ---------------------------------------------------------------- high scores
 

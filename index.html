@@ -385,6 +385,34 @@
       user-select: none;
     }
     .plane-card.locked .p-thumb { filter: grayscale(1) brightness(0.65); }
+    /* Model style switch: classic blocks / detailed lofts / photoreal skins */
+    .styles {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin: 2px 0 4px;
+    }
+    .style-label { font-size: 11px; letter-spacing: 1px; color: var(--text-dim); margin-right: 6px; }
+    .style-btn {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      padding: 5px 12px;
+      margin: 0;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .style-btn:hover { border-color: var(--steel); filter: none; }
+    .style-btn.selected {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(232, 163, 61, 0.08);
+    }
+    .style-desc { font-size: 11px; color: var(--text-dim); margin-bottom: 10px; }
     .p-name { font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 4px; }
     .p-desc { font-size: 11px; color: var(--text-dim); line-height: 1.35; }
 
@@ -483,6 +511,8 @@
         <h1>BLUE MAX</h1>
         <div class="sub">A modernized 2.5D homage to the 1983 classic</div>
         <div id="career" class="sub"></div>
+        <div id="styleBar" class="styles"></div>
+        <div id="styleDesc" class="style-desc"></div>
         <div class="planes" id="planeGrid"></div>
         <div class="controls">
           <span class="k">← →</span><span class="d">Steer</span>

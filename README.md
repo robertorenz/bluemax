@@ -3,7 +3,8 @@
 A modernized 2.5D homage to **Blue Max** (Synapse Software, 1983) — the classic
 isometric WWI biplane shooter. Built with **Three.js + TypeScript + Vite**: a real-time
 low-poly 3D world with a tilted chase camera, dynamic shadows, and distance fog. All
-models are built procedurally from primitives (zero external assets).
+models are built procedurally (zero external assets) — the aircraft in three
+selectable styles, from the original blocks to lofted, textured, weathered airframes.
 
 **▶ Play it now: [robertorenz.github.io/bluemax](https://robertorenz.github.io/bluemax/)**
 
@@ -88,6 +89,36 @@ night — when AA searchlights sweep the sky, lock onto you, and shoot faster.
 
 **Photo mode:** press P in flight to freeze the world and orbit the camera
 (arrows orbit, W/S zoom).
+
+## Aircraft models
+
+The hangar menu has a **MODELS** switch with three looks for every aircraft
+(yours and the enemy's). The choice is remembered between sessions.
+
+| Style | What you get |
+|-------|--------------|
+| **Classic** | The original low-poly block models. |
+| **Detailed** | Airframes lofted from real cross-sections and airfoil profiles: rounded fuselages, elliptical / tapered / rounded-tip wings with dihedral and sweep, proper fins and rudders, radial engines with visible cylinders, spinners, exposed inline cylinder heads and exhaust stacks, framed or bubble canopies with a pilot inside, V-strut undercarriages, spats, interplane and cabane struts with rigging wires. Skins are painted procedurally: doped-fabric rib tapes or panel lines, and period-correct roundels, crosses, stars, fin flashes and rudder stripes. |
+| **Photoreal** | The same airframes with weathered PBR skins: mottled sun-faded paint, panel lines and rivet rows baked into normal maps, exhaust staining, chipped leading edges, roughness/metalness maps, bare-metal finishes and sky reflections on canopies. Heavier on the GPU; skins are built once and cached. |
+
+In the detailed and photoreal styles the planes also *move* like aircraft:
+ailerons, elevators and rudder deflect with your inputs, the nose lags into a
+turn, wings flex under a pull-up, the propeller blurs into a disc at speed,
+exhausts flicker, the guns throw muzzle flashes, and retractable undercarriages
+come down for landings and takeoffs.
+
+**Drop-in real models (optional).** The photoreal style will use a real glTF
+model for any aircraft you provide. Put `.glb` files under `public/models/` and
+describe them in `public/models/manifest.json`, keyed by hangar id
+(`spitfire`, `p51`, ...) or enemy tag (`enemy-bi`, `enemy-tri`, `enemy-mono`,
+`enemy-ace`, `enemy-bomber`):
+
+```json
+{ "spitfire": { "file": "spitfire.glb", "scale": 1.0, "rotY": 3.1416, "y": 0, "z": 0 } }
+```
+
+Models should face −z at roughly 7 units per fighter length; use `scale`,
+`rotY`, `y` and `z` to fit. Anything missing falls back to the procedural build.
 
 ## Scoring
 
