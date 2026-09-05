@@ -57,25 +57,44 @@ export function rememberFit(model: PlaneModel): void {
   model.group.userData.fitBox = new THREE.Box3().setFromObject(model.group);
 }
 
-/** Tallest vertex within the front and rear fifths of the model's length (world z). */
-function endHeights(obj: THREE.Object3D, box: THREE.Box3): { front: number; rear: number } {
+interface EndShape { width: number; height: number }
+
+/**
+ * Spanwise width and tallest point of the model's two ends (the outer 15 % of
+ * its length along z). The tailplane makes the tail far wider than a nose;
+ * height (the fin) breaks near-ties.
+ */
+function endShapes(obj: THREE.Object3D, box: THREE.Box3): { front: EndShape; rear: EndShape } {
   const len = box.max.z - box.min.z;
-  const frontZ = box.min.z + len * 0.2;
-  const rearZ = box.max.z - len * 0.2;
-  let front = -Infinity, rear = -Infinity;
+  const frontZ = box.min.z + len * 0.15;
+  const rearZ = box.max.z - len * 0.15;
+  const front = { minX: Infinity, maxX: -Infinity, maxY: -Infinity };
+  const rear = { minX: Infinity, maxX: -Infinity, maxY: -Infinity };
   const v = new THREE.Vector3();
   obj.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return;
     const pos = o.geometry.getAttribute('position');
     if (!pos) return;
-    const stride = Math.max(1, Math.floor(pos.count / 4000));
+    const stride = Math.max(1, Math.floor(pos.count / 6000));
     for (let i = 0; i < pos.count; i += stride) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-      if (v.z < frontZ) front = Math.max(front, v.y);
-      else if (v.z > rearZ) rear = Math.max(rear, v.y);
+      const end = v.z < frontZ ? front : v.z > rearZ ? rear : null;
+      if (!end) continue;
+      end.minX = Math.min(end.minX, v.x);
+      end.maxX = Math.max(end.maxX, v.x);
+      end.maxY = Math.max(end.maxY, v.y);
     }
   });
-  return { front, rear };
+  const shape = (e: typeof front): EndShape => ({ width: e.maxX - e.minX, height: e.maxY });
+  return { front: shape(front), rear: shape(rear) };
+}
+
+/** True when the end at -z looks like a tail (wider, or as wide and taller). */
+function frontIsTail(obj: THREE.Object3D, box: THREE.Box3): boolean {
+  const { front, rear } = endShapes(obj, box);
+  if (front.width > rear.width * 1.15) return true;
+  if (rear.width > front.width * 1.15) return false;
+  return front.height > rear.height;
 }
 
 const worldBox = (obj: THREE.Object3D): THREE.Box3 => {
@@ -101,9 +120,8 @@ export function fitModel(inst: THREE.Object3D, fit: THREE.Box3, entry: Partial<R
     inst.rotation.y = yaw;
     box = worldBox(inst);
   }
-  // Nose toward -z: the fin makes the tail the taller end.
-  const ends = endHeights(inst, box);
-  if (ends.front > ends.rear) {
+  // Nose toward -z: the tailplane makes the tail the wide end.
+  if (frontIsTail(inst, box)) {
     yaw += Math.PI;
     inst.rotation.y = yaw;
   }

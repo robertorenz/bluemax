@@ -141,7 +141,16 @@ you redistribute). The workflow:
 5. `npm run dev`, switch **MODELS** to Photoreal, pick the plane. If it flies
    backwards, set that entry's `"rotY"` to `3.1416` in `manifest.json` and
    reload; `scale`, `x`, `y`, `z` fine-tune the fit.
-6. Commit `public/models/` and push — the Pages workflow deploys it.
+6. Shrink it before committing. Sketchfab exports are big (a single `scene.bin`
+   can top 100 MB, which GitHub refuses outright, and every visitor downloads
+   whatever you ship). One command compresses the mesh and caps the textures:
+   ```bash
+   npx @gltf-transform/cli optimize public/models/dr1/scene.gltf public/models/dr1/scene.glb --texture-size 1024
+   ```
+   then delete the original `scene.gltf`, `scene.bin` and `textures/` folder, and
+   rerun `npm run models` so the manifest points at the new `.glb`. A few MB per
+   plane is a good target.
+7. Commit `public/models/` and push — the Pages workflow deploys it.
 
 ## Scoring
 
